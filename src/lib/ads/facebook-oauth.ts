@@ -9,7 +9,9 @@
 
 const GRAPH = 'https://graph.facebook.com';
 const DIALOG = 'https://www.facebook.com';
-const VERSION = process.env.FB_API_VERSION ?? 'v23.0';
+// `||` chứ không phải `??`: biến môi trường để trống là chuỗi rỗng, mà `??`
+// chỉ nhận null/undefined nên sẽ truyền chuỗi rỗng đi tiếp.
+const VERSION = process.env.FB_API_VERSION || 'v23.0';
 
 /** Chỉ xin quyền đọc. Thêm scope là mở rộng thứ token làm được — cân nhắc kỹ. */
 export const SCOPES = ['ads_read', 'business_management'] as const;
@@ -27,7 +29,9 @@ export function oauthConfig(origin: string): OAuthConfig | null {
   if (!appId || !appSecret) return null;
   // Cho phép ép cứng qua env khi chạy sau proxy; mặc định suy từ origin của
   // request để dev và production không phải sửa code.
-  const redirectUri = process.env.FB_REDIRECT_URI ?? `${origin}/api/connections/facebook/callback`;
+  // `||` chứ không phải `??` — xem ghi chú ở VERSION. Để trống biến này là
+  // trường hợp thường gặp nhất, và redirect_uri rỗng thì Facebook từ chối.
+  const redirectUri = process.env.FB_REDIRECT_URI || `${origin}/api/connections/facebook/callback`;
   return { appId, appSecret, redirectUri };
 }
 

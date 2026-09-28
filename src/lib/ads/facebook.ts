@@ -4,7 +4,7 @@
 // ở file riêng và đi qua guard attribution + ghi ad_mutation.
 
 const GRAPH = 'https://graph.facebook.com';
-const VERSION = process.env.FB_API_VERSION ?? 'v23.0';
+const VERSION = process.env.FB_API_VERSION || 'v23.0';
 const TIMEOUT_MS = 25_000;
 const MAX_RETRY = 3;
 
