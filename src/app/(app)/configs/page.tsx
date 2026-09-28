@@ -1,6 +1,7 @@
 import { requireUser } from '@/lib/session';
 import { listConfigs, countByKind } from '@/lib/queries/configs';
 import { listAccounts } from '@/lib/queries/ads';
+import { db } from '@/lib/db';
 import { KINDS, KIND_LABEL } from '@/lib/configs/schema';
 import { ConfigBrowser } from './config-browser';
 
@@ -13,6 +14,19 @@ export default async function ConfigsPage() {
     countByKind(user.id),
     listAccounts(user.id),
   ]);
+
+  // Chiến dịch theo tài khoản — để modal cho chọn "chiến dịch được bảo vệ"
+  // từ danh sách thật thay vì bắt gõ ID.
+  const { rows: campRows } = await db.query(
+    `SELECT c.id, c.name, c.objective, c.ad_account_id
+     FROM ad_campaign c JOIN ad_account a ON a.id = c.ad_account_id
+     WHERE a.owner_id = $1 ORDER BY c.name`,
+    [user.id],
+  );
+  const campaigns: Record<string, { id: string; name: string; objective: string }[]> = {};
+  for (const r of campRows) {
+    (campaigns[r.ad_account_id] ??= []).push({ id: r.id, name: r.name, objective: r.objective });
+  }
 
   return (
     <>
@@ -34,7 +48,8 @@ export default async function ConfigsPage() {
 
       <ConfigBrowser
         configs={configs}
-        accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
+        accounts={accounts.map((a) => ({ id: a.id, name: a.name, platform: a.platform }))}
+        campaigns={campaigns}
       />
     </>
   );

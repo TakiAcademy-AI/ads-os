@@ -23,6 +23,9 @@ export const KIND_DESC: Record<AutomationKind, string> = {
   post_trigger: 'Tạo chiến dịch khi fanpage đăng bài khớp từ khoá',
 };
 
+export const PLATFORMS = ['facebook', 'tiktok', 'google'] as const;
+export type Platform = (typeof PLATFORMS)[number];
+
 const OBJECTIVE = z.enum(['messages', 'leads', 'sales', 'traffic', 'awareness', 'video_views']);
 
 /** Một ngưỡng CPA cho một loại chiến dịch. */
@@ -40,6 +43,7 @@ export const CpaTargetSchema = z.object({
 });
 
 export const AutoPauseParams = z.object({
+  platform: z.enum(PLATFORMS).default('facebook'),
   /**
    * 'dry_run' chỉ ghi đề xuất vào ad_mutation, không gọi API nền tảng.
    * Mặc định dry_run: bật cấu hình lên không đồng nghĩa với cho phép tiêu tiền.
@@ -56,12 +60,20 @@ export const AutoPauseParams = z.object({
   protectedCampaignIds: z.array(z.string().uuid()).default([]),
   /** Trần số chiến dịch được tắt trong một lượt chạy. */
   maxPausesPerRun: z.number().int().min(1).max(50).default(3),
+  /** Gửi cảnh báo Telegram khi vượt ngưỡng, kể cả lúc không tắt. */
+  notifyOnly: z.boolean().default(false),
 });
 
 export const MetricSyncParams = z.object({
+  platform: z.enum(PLATFORMS).default('facebook'),
   lookbackDays: z.number().int().min(1).max(90).default(30),
   /** Cấp dữ liệu cần kéo. Càng sâu càng tốn quota API. */
   level: z.enum(['campaign', 'adset', 'ad']).default('campaign'),
+  /**
+   * Chỉ số tuỳ chọn, ngoài nhóm bắt buộc. Vào cột extra_metrics.
+   * Xem danh mục ở src/lib/ads/metric-catalog.ts.
+   */
+  extraFields: z.array(z.string()).default([]),
 });
 
 export const BudgetScheduleParams = z.object({
