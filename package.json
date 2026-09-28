@@ -1,0 +1,39 @@
+{
+  "name": "ads-os",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "tsc --noEmit",
+    "db:migrate": "node scripts/migrate.cjs up",
+    "db:rollback": "node scripts/migrate.cjs down 1",
+    "db:seed": "tsx scripts/seed.ts"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "^4",
+    "bcryptjs": "^3.0.3",
+    "iron-session": "^8.0.4",
+    "lucide-react": "^1.14.0",
+    "next": "^16.3.6",
+    "node-pg-migrate": "^8.0.4",
+    "pg": "^8.20.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "recharts": "^3.8.1",
+    "tailwindcss": "^4",
+    "zod": "^4.4.2"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "dotenv": "^17.4.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  }
+}
