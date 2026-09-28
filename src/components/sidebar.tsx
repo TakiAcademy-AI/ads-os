@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 interface Item {
   href: string;
@@ -35,6 +35,15 @@ const GROUPS: { group: string; items: Item[] }[] = [
 
 export function Sidebar({ userName }: { userName: string }) {
   const path = usePathname();
+  const router = useRouter();
+
+  async function logout() {
+    // Cookie chỉ xoá được trong Route Handler — Server Component không sửa
+    // được cookie (xem ghi chú ở src/lib/session.ts).
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.replace('/login');
+    router.refresh();
+  }
 
   return (
     <aside className="side">
@@ -65,7 +74,13 @@ export function Sidebar({ userName }: { userName: string }) {
         </div>
       ))}
 
-      <div className="side-foot">{userName}</div>
+      <div className="side-foot" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</span>
+        <button onClick={logout} className="btn btn-ghost"
+                style={{ fontSize: 11.5, padding: '4px 9px' }}>
+          Thoát
+        </button>
+      </div>
     </aside>
   );
 }

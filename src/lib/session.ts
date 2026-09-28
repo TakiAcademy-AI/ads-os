@@ -43,10 +43,13 @@ export async function requireUser(): Promise<CurrentUser> {
     [session.userId],
   );
   const user = rows[0];
-  // Tài khoản bị xoá nhưng cookie còn → huỷ phiên thay vì lỗi 500.
-  if (!user) {
-    session.destroy();
-    redirect('/login');
-  }
+  // Tài khoản bị xoá nhưng cookie còn (vd sau khi tạo lại database).
+  //
+  // KHÔNG gọi session.destroy() ở đây: requireUser() chạy trong Server
+  // Component, mà Next chỉ cho sửa cookie trong Server Action hoặc Route
+  // Handler — gọi ở đây làm MỌI trang ném lỗi thay vì chuyển hướng.
+  // Cookie cũ để nguyên thì vô hại: nó chỉ tra không ra người dùng, và lần
+  // đăng nhập sau sẽ ghi đè. Muốn xoá hẳn thì gọi POST /api/auth/logout.
+  if (!user) redirect('/login');
   return user;
 }
