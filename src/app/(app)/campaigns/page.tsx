@@ -21,7 +21,7 @@ function Row({ c }: { c: CampaignRow }) {
         <div className="cell-title">{c.name}</div>
         <div className="cell-sub">
           {OBJECTIVE_LABEL[c.objective] ?? c.objective} · {c.status} · {num(c.conversions)} kết quả
-          {c.isWhitelisted && <> · <span className="tag tag-mute">whitelist</span></>}
+          {c.isWhitelisted && <> · <span className="tag tag-mute">được bảo vệ</span></>}
         </div>
       </td>
       <td className="n mono">{vnd(c.spendMicros)}</td>

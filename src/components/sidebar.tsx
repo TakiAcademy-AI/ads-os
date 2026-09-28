@@ -20,10 +20,7 @@ const GROUPS: { group: string; items: Item[] }[] = [
   {
     group: 'Tự động hóa',
     items: [
-      { href: '/automation/pause', label: 'Tắt ads tự động' },
-      { href: '/automation/sync', label: 'Kéo chỉ số', soon: true },
-      { href: '/automation/budget', label: 'Ngân sách theo giờ', soon: true },
-      { href: '/automation/triggers', label: 'Auto chạy ads', soon: true },
+      { href: '/configs', label: 'Cấu hình' },
     ],
   },
   {

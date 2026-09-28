@@ -16,14 +16,14 @@ const LAG = 7;
 
 interface Spec {
   ext: string; name: string; objective: 'messages' | 'leads';
-  status: string; dailyVnd: number; trueCpaVnd: number; whitelist?: boolean;
+  status: string; dailyVnd: number; trueCpaVnd: number; protected?: boolean;
 }
 
 const CAMPAIGNS: Spec[] = [
   { ext: 'c_ai_basic', name: 'Tin nhắn - Khóa AI cơ bản',     objective: 'messages', status: 'ACTIVE', dailyVnd: 1_500_000, trueCpaVnd: 112_000 },
   { ext: 'c_ai_adv',   name: 'Tin nhắn - Khóa AI nâng cao',   objective: 'messages', status: 'ACTIVE', dailyVnd: 1_800_000, trueCpaVnd: 190_000 },
   { ext: 'c_biz',      name: 'Lead - Tư vấn doanh nghiệp',    objective: 'leads',    status: 'ACTIVE', dailyVnd: 1_200_000, trueCpaVnd:  64_000 },
-  { ext: 'c_remarket', name: 'Tin nhắn - Remarketing 7 ngày', objective: 'messages', status: 'ACTIVE', dailyVnd:   900_000, trueCpaVnd:  78_000, whitelist: true },
+  { ext: 'c_remarket', name: 'Tin nhắn - Remarketing 7 ngày', objective: 'messages', status: 'ACTIVE', dailyVnd:   900_000, trueCpaVnd:  78_000, protected: true },
   { ext: 'c_webinar',  name: 'Lead - Webinar tháng 10',       objective: 'leads',    status: 'ACTIVE', dailyVnd: 1_100_000, trueCpaVnd: 103_000 },
 ];
 
@@ -59,25 +59,41 @@ async function main() {
   );
   if (!acct) throw new Error('Không tạo được ad_account');
 
-  for (const [objective, cpa] of [['messages', 120_000], ['leads', 80_000]] as const) {
-    await db.query(
-      `INSERT INTO cpa_target (ad_account_id, objective, target_cpa_micros)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (ad_account_id, objective) DO UPDATE
-         SET target_cpa_micros = EXCLUDED.target_cpa_micros`,
-      [acct.id, objective, vnd(cpa)],
-    );
-  }
+  // Cấu hình tắt ads — trạng thái 'active' cho demo, nhưng mode 'dry_run'
+  // nên chỉ ghi đề xuất vào nhật ký, không tắt gì thật.
+  await db.query(
+    `INSERT INTO automation_config
+       (owner_id, ad_account_id, kind, name, status, interval_minutes, params)
+     VALUES ($1,$2,'auto_pause','Tắt ads theo ngưỡng CPA','active',30,$3::jsonb)
+     ON CONFLICT (ad_account_id, kind, name) DO UPDATE SET params = EXCLUDED.params`,
+    [user.id, acct.id, JSON.stringify({
+      mode: 'dry_run',
+      maxPausesPerRun: 3,
+      protectedCampaignIds: [],
+      targets: [
+        { objective: 'messages', targetCpaMicros: vnd(120_000), attributionDays: 7, minConversions: 10, minClicks: 100 },
+        { objective: 'leads',    targetCpaMicros: vnd(80_000),  attributionDays: 7, minConversions: 10, minClicks: 100 },
+      ],
+    })],
+  );
+
+  await db.query(
+    `INSERT INTO automation_config
+       (owner_id, ad_account_id, kind, name, status, interval_minutes, params)
+     VALUES ($1,$2,'metric_sync','Đồng bộ Facebook hằng ngày','paused',1440,$3::jsonb)
+     ON CONFLICT (ad_account_id, kind, name) DO NOTHING`,
+    [user.id, acct.id, JSON.stringify({ lookbackDays: 30, level: 'campaign' })],
+  );
 
   let daily = 0, revisions = 0;
 
   for (const c of CAMPAIGNS) {
     const { rows: [camp] } = await db.query<{ id: string }>(
       `INSERT INTO ad_campaign
-         (ad_account_id, external_id, name, objective, status, daily_budget_micros, is_whitelisted, start_time)
-       VALUES ($1,$2,$3,$4,$5,$6,$7, NOW() - INTERVAL '${DAYS} days')
+         (ad_account_id, external_id, name, objective, status, daily_budget_micros, start_time)
+       VALUES ($1,$2,$3,$4,$5,$6, NOW() - INTERVAL '${DAYS} days')
        RETURNING id`,
-      [acct.id, c.ext, c.name, c.objective, c.status, vnd(c.dailyVnd * 1.2), c.whitelist ?? false],
+      [acct.id, c.ext, c.name, c.objective, c.status, vnd(c.dailyVnd * 1.2)],
     );
     if (!camp) throw new Error(`Không tạo được campaign ${c.ext}`);
 
@@ -124,14 +140,14 @@ async function main() {
     ['c_webinar',  'dry_run', 'blocked', 'ACTIVE', 'PAUSED',
      'attribution_window', 9, vnd(180_000), null, vnd(80_000)],
     ['c_remarket', 'dry_run', 'blocked', 'ACTIVE', 'PAUSED',
-     'whitelist', 26, vnd(131_000), vnd(98_000), vnd(120_000)],
+     'protected_campaign', 26, vnd(131_000), vnd(98_000), vnd(120_000)],
   ];
 
   const REASON: Record<string, string> = {
     c_ai_adv: 'CPA đã chín 200.000đ vượt ngưỡng 120.000đ (tính trên dữ liệu đã qua cửa sổ attribution, 63 chuyển đổi). Kết luận không bị ảnh hưởng bởi chuyển đổi chưa về.',
     c_ai_basic: 'GIỮ LẠI: CPA thô 136.364đ vượt ngưỡng 120.000đ, nhưng CPA đã chín chỉ 115.385đ — vẫn dưới ngưỡng. Chênh lệch do chuyển đổi 7 ngày gần nhất chưa về đủ.',
     c_webinar: 'Chưa đủ dữ liệu đã chín để kết luận: 4 chuyển đổi / 58 click (cần tối thiểu 10 chuyển đổi và 100 click).',
-    c_remarket: 'Chiến dịch nằm trong whitelist — chỉ gửi cảnh báo, không tắt.',
+    c_remarket: 'Chiến dịch nằm trong danh sách bảo vệ — chỉ gửi cảnh báo, không tắt.',
   };
 
   for (const [ext, mode, status, before, after, blockedBy, hours, raw, settled, target] of LOG) {
@@ -151,6 +167,15 @@ async function main() {
        raw, settled, target, `${ext}:pause:${isoMinus(0)}`],
     );
   }
+
+  // Chiến dịch được bảo vệ: ghi vào params của cấu hình, không còn cột boolean.
+  const guarded = camps.filter((c) => c.external_id === 'c_remarket').map((c) => c.id);
+  await db.query(
+    `UPDATE automation_config
+     SET params = jsonb_set(params, '{protectedCampaignIds}', $2::jsonb)
+     WHERE ad_account_id = $1 AND kind = 'auto_pause'`,
+    [acct.id, JSON.stringify(guarded)],
+  );
 
   console.log(
     `Xong.\n  đăng nhập: ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}\n` +

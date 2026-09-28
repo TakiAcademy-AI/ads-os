@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { getPauseConfig } from './configs';
 import {
   assessCpa,
   measureAttributionLag,
@@ -115,14 +116,16 @@ export async function listCampaigns(
   days: number,
   today: string,
 ): Promise<CampaignRow[]> {
+  // Ngưỡng nằm trong cấu hình auto_pause (migration 003), không còn bảng riêng.
+  const pauseConfig = await getPauseConfig(accountId);
+  const targetByObjective = new Map(
+    (pauseConfig?.params.targets ?? []).map((t) => [t.objective as string, t]),
+  );
+  const protectedIds = new Set(pauseConfig?.params.protectedCampaignIds ?? []);
+
   const { rows: camps } = await db.query(
-    `SELECT c.id, c.external_id, c.name, c.objective, c.status, c.is_whitelisted,
-            t.target_cpa_micros, t.attribution_days, t.min_conversions, t.min_clicks
-     FROM ad_campaign c
-     LEFT JOIN cpa_target t
-       ON t.ad_account_id = c.ad_account_id AND t.objective = c.objective
-     WHERE c.ad_account_id = $1
-     ORDER BY c.name`,
+    `SELECT id, external_id, name, objective, status
+     FROM ad_campaign WHERE ad_account_id = $1 ORDER BY name`,
     [accountId],
   );
   if (!camps.length) return [];
@@ -151,13 +154,12 @@ export async function listCampaigns(
 
   return camps.map((c) => {
     const rows = byCampaign.get(c.id) ?? [];
-    const target = c.target_cpa_micros
-      ? Number(c.target_cpa_micros)
-      : (DEFAULT_TARGETS[c.objective] ?? 0);
+    const t = targetByObjective.get(c.objective);
+    const target = t?.targetCpaMicros ?? DEFAULT_TARGETS[c.objective] ?? 0;
     const opts: AttributionOptions = {
-      attributionDays: c.attribution_days ?? 7,
-      minConversions: c.min_conversions ?? 10,
-      minClicks: c.min_clicks ?? 100,
+      attributionDays: t?.attributionDays ?? 7,
+      minConversions: t?.minConversions ?? 10,
+      minClicks: t?.minClicks ?? 100,
       today,
     };
     return {
@@ -166,7 +168,7 @@ export async function listCampaigns(
       name: c.name,
       objective: c.objective,
       status: c.status,
-      isWhitelisted: c.is_whitelisted,
+      isWhitelisted: protectedIds.has(c.id),
       spendMicros: rows.reduce((s, r) => s + r.spendMicros, 0),
       conversions: rows.reduce((s, r) => s + r.conversions, 0),
       clicks: rows.reduce((s, r) => s + r.clicks, 0),
