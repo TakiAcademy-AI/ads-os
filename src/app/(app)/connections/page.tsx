@@ -1,7 +1,9 @@
 import { requireUser } from '@/lib/session';
 import { db } from '@/lib/db';
 import { dateTime } from '@/lib/format';
+import { oauthConfig } from '@/lib/ads/facebook-oauth';
 import { ConnectPanel } from './connect-panel';
+import { AccountActions } from './account-actions';
 import { SyncButton } from './sync-button';
 
 export const dynamic = 'force-dynamic';
@@ -40,7 +42,7 @@ export default async function ConnectionsPage() {
         </div>
       </div>
 
-      <ConnectPanel />
+      <ConnectPanel oauthReady={oauthConfig('http://x') !== null} />
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-head">
@@ -86,8 +88,16 @@ export default async function ConnectionsPage() {
                       )}
                     </td>
                     <td className="n">
-                      {a.has_token ? <SyncButton accountId={a.id} />
-                                   : <span className="note" style={{ margin: 0 }}>cần token</span>}
+                      {a.status === 'pending' ? (
+                        <AccountActions id={a.id} pending />
+                      ) : a.has_token ? (
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+                          <SyncButton accountId={a.id} />
+                          <AccountActions id={a.id} />
+                        </div>
+                      ) : (
+                        <span className="note" style={{ margin: 0 }}>cần token</span>
+                      )}
                     </td>
                   </tr>
                 );

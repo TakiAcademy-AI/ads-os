@@ -8,6 +8,12 @@ export interface SessionData {
   email?: string;
   name?: string;
   role?: 'admin' | 'member' | 'viewer';
+  /**
+   * Chống CSRF cho luồng OAuth. Sinh lúc bắt đầu, đối chiếu ở callback rồi xoá.
+   * Để trong session cookie nên tự động gắn với đúng người dùng đã đăng nhập —
+   * kẻ tấn công không dựng được state hợp lệ cho phiên của người khác.
+   */
+  fbOauthState?: string;
 }
 
 const sessionOptions: SessionOptions = {

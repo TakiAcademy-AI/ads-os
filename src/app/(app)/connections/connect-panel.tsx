@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface Found {
@@ -17,16 +17,59 @@ const inputStyle: React.CSSProperties = {
   background: 'var(--card)', color: 'var(--ink)',
 };
 
-export function ConnectPanel() {
+export function ConnectPanel({ oauthReady }: { oauthReady: boolean }) {
   const router = useRouter();
+  const [mode, setMode] = useState<'oauth' | 'token'>(oauthReady ? 'oauth' : 'token');
   const [token, setToken] = useState('');
   const [found, setFound] = useState<Found[] | null>(null);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState('');
+  const popup = useRef<Window | null>(null);
+
+  // Popup báo kết quả về bằng postMessage. Chỉ nhận message cùng origin —
+  // không thì bất kỳ trang nào cũng giả được kết quả "kết nối thành công".
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.origin !== window.location.origin) return;
+      const d = e.data as { ok?: boolean; accounts?: number; error?: string };
+      if (typeof d?.ok !== 'boolean') return;
+      setBusy(false);
+      if (d.ok) {
+        setInfo(`Đã lấy được ${d.accounts} tài khoản. Chọn tài khoản muốn dùng ở bảng dưới.`);
+        setError('');
+        router.refresh();
+      } else {
+        setError(d.error ?? 'Kết nối thất bại');
+      }
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [router]);
+
+  function startOauth() {
+    setBusy(true); setError(''); setInfo('');
+    const w = 620, h = 720;
+    const left = window.screenX + (window.outerWidth - w) / 2;
+    const top = window.screenY + (window.outerHeight - h) / 2;
+    popup.current = window.open(
+      '/api/connections/facebook/start', 'fb-oauth',
+      `width=${w},height=${h},left=${left},top=${top}`,
+    );
+    if (!popup.current) {
+      setBusy(false);
+      setError('Trình duyệt chặn popup. Cho phép popup cho trang này rồi thử lại.');
+      return;
+    }
+    // Người dùng đóng popup giữa chừng thì không có postMessage nào tới.
+    const timer = setInterval(() => {
+      if (popup.current?.closed) { clearInterval(timer); setBusy(false); }
+    }, 700);
+  }
 
   async function probe() {
-    setBusy(true); setError(''); setFound(null);
+    setBusy(true); setError(''); setFound(null); setInfo('');
     const res = await fetch('/api/connections', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -56,62 +99,111 @@ export function ConnectPanel() {
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head">
-        <b>Kết nối tài khoản Facebook Ads</b>
-        <span>token chỉ cần quyền ads_read</span>
+        <b>Thêm kết nối</b>
+        <span>chỉ xin quyền đọc số liệu</span>
       </div>
 
       <div style={{ padding: '16px 18px' }}>
         {error && <div className="err" style={{ marginBottom: 12 }}>{error}</div>}
+        {info && (
+          <div style={{
+            background: 'var(--grn-soft)', color: 'var(--grn)', fontSize: 12.5,
+            padding: '10px 12px', borderRadius: 'var(--r-sm)', marginBottom: 12,
+          }}>{info}</div>
+        )}
 
-        <div style={{ fontSize: 12.5, color: 'var(--ink-2)', marginBottom: 8 }}>
-          System User access token
-        </div>
-        <div style={{ display: 'flex', gap: 9 }}>
-          <input
-            style={{ ...inputStyle, flex: 1, fontFamily: 'var(--font-mono), monospace', fontSize: 12.5 }}
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="EAAG…"
-            type="password"
-            autoComplete="off"
-          />
-          <button className="btn" onClick={probe} disabled={busy || token.trim().length < 20}>
-            {busy ? 'Đang kiểm tra…' : 'Kiểm tra'}
-          </button>
-        </div>
-        <div className="note" style={{ maxWidth: 'none', marginTop: 8 }}>
-          Token được mã hoá trước khi lưu và không bao giờ hiện lại. Dùng token chỉ có
-          quyền <span className="mono">ads_read</span> — lúc đó dù có lỗi ở đâu thì
-          Facebook cũng từ chối mọi lệnh ghi.
+        <div style={{ display: 'flex', gap: 4, background: 'var(--side)', padding: 4,
+                      borderRadius: 'var(--r-sm)', marginBottom: 16, width: 'fit-content' }}>
+          {([['oauth', 'Đăng nhập Facebook'], ['token', 'Dán token thủ công']] as const).map(([m, label]) => (
+            <button key={m} onClick={() => setMode(m)}
+                    disabled={m === 'oauth' && !oauthReady}
+                    style={{
+                      padding: '7px 15px', fontSize: 13, fontWeight: 500, fontFamily: 'inherit',
+                      border: 0, borderRadius: 6,
+                      cursor: m === 'oauth' && !oauthReady ? 'not-allowed' : 'pointer',
+                      background: mode === m ? 'var(--card)' : 'transparent',
+                      color: mode === m ? 'var(--ink)' : 'var(--dim)',
+                      opacity: m === 'oauth' && !oauthReady ? .5 : 1,
+                    }}>
+              {label}
+            </button>
+          ))}
         </div>
 
-        {found && (
-          <div style={{ marginTop: 18 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>
-              {found.length === 0
-                ? 'Token hợp lệ nhưng không truy cập được tài khoản quảng cáo nào'
-                : `Tìm thấy ${found.length} tài khoản — chọn để kết nối`}
-            </div>
-            {found.map((a) => (
-              <div key={a.externalId} style={{
-                display: 'flex', alignItems: 'center', gap: 12, padding: '11px 13px',
-                border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', marginBottom: 7,
-              }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 500 }}>{a.name}</div>
-                  <div className="mono" style={{ fontSize: 11.5, color: 'var(--dim)' }}>
-                    {a.externalId} · {a.currency}{a.timezone ? ` · ${a.timezone}` : ''}
-                  </div>
-                </div>
-                {!a.active && <span className="tag tag-hold">không hoạt động</span>}
-                <button className="btn btn-ghost" style={{ fontSize: 12.5 }}
-                        disabled={saving === a.externalId}
-                        onClick={() => save(a)}>
-                  {saving === a.externalId ? 'Đang lưu…' : 'Kết nối'}
-                </button>
+        {mode === 'oauth' && (
+          <>
+            {!oauthReady ? (
+              <div style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                Chưa cấu hình app Facebook. Thêm <span className="mono">FB_APP_ID</span> và{' '}
+                <span className="mono">FB_APP_SECRET</span> vào <span className="mono">.env</span>,
+                và khai báo redirect URI{' '}
+                <span className="mono">{typeof window !== 'undefined' ? window.location.origin : ''}/api/connections/facebook/callback</span>{' '}
+                trong phần Facebook Login của app.
               </div>
-            ))}
-          </div>
+            ) : (
+              <>
+                <button className="btn" onClick={startOauth} disabled={busy}
+                        style={{ background: '#1877F2', fontSize: 14, padding: '11px 20px' }}>
+                  {busy ? 'Đang chờ cửa sổ Facebook…' : 'Đăng nhập bằng Facebook'}
+                </button>
+                <div className="note" style={{ maxWidth: 'none', marginTop: 10 }}>
+                  Popup sẽ hiện lên để bạn chọn tài khoản và duyệt quyền. Ads OS chỉ xin{' '}
+                  <span className="mono">ads_read</span> — không có quyền sửa hay tắt chiến dịch.
+                  Token nhận về có hạn 60 ngày, hết hạn thì nối lại.
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {mode === 'token' && (
+          <>
+            <div style={{ fontSize: 12.5, color: 'var(--ink-2)', marginBottom: 8 }}>
+              System User access token
+            </div>
+            <div style={{ display: 'flex', gap: 9 }}>
+              <input
+                style={{ ...inputStyle, flex: 1, fontFamily: 'var(--font-mono), monospace', fontSize: 12.5 }}
+                value={token} onChange={(e) => setToken(e.target.value)}
+                placeholder="EAAG…" type="password" autoComplete="off"
+              />
+              <button className="btn" onClick={probe} disabled={busy || token.trim().length < 20}>
+                {busy ? 'Đang kiểm tra…' : 'Kiểm tra'}
+              </button>
+            </div>
+            <div className="note" style={{ maxWidth: 'none', marginTop: 8 }}>
+              System User token <b>không hết hạn</b> — hợp cho chạy nền dài hạn, nhưng phải tự
+              tạo trong Business Settings. Token mã hoá trước khi lưu và không hiện lại.
+            </div>
+
+            {found && (
+              <div style={{ marginTop: 18 }}>
+                <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>
+                  {found.length === 0
+                    ? 'Token hợp lệ nhưng không truy cập được tài khoản quảng cáo nào'
+                    : `Tìm thấy ${found.length} tài khoản`}
+                </div>
+                {found.map((a) => (
+                  <div key={a.externalId} style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '11px 13px',
+                    border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', marginBottom: 7,
+                  }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 500 }}>{a.name}</div>
+                      <div className="mono" style={{ fontSize: 11.5, color: 'var(--dim)' }}>
+                        {a.externalId} · {a.currency}{a.timezone ? ` · ${a.timezone}` : ''}
+                      </div>
+                    </div>
+                    {!a.active && <span className="tag tag-hold">không hoạt động</span>}
+                    <button className="btn btn-ghost" style={{ fontSize: 12.5 }}
+                            disabled={saving === a.externalId} onClick={() => save(a)}>
+                      {saving === a.externalId ? 'Đang lưu…' : 'Kết nối'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
