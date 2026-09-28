@@ -31,7 +31,7 @@ const GROUPS: { group: string; items: Item[] }[] = [
     items: [
       { href: '/log', label: 'Nhật ký thay đổi' },
       { href: '/connections', label: 'Kết nối', soon: true },
-      { href: '/mcp', label: 'MCP Server', soon: true },
+      { href: '/mcp', label: 'MCP Server' },
     ],
   },
 ];
