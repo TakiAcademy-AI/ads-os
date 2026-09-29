@@ -18,6 +18,7 @@ import { readToken } from '../ads/token';
 import { readPageToken, fetchRecentPosts } from '../ads/pages';
 import { createBoostCampaign, deleteCampaign, AdCreateError } from '../ads/facebook-create';
 import { safeParams } from '../configs/schema';
+import { getTemplate } from '../queries/templates';
 
 export interface PostTriggerResult {
   scanned: number;
@@ -106,10 +107,34 @@ export async function runPostTrigger(
   }
 
   const { rows: acct } = await db.query(
-    'SELECT external_id FROM ad_account WHERE id = $1', [adAccountId],
+    'SELECT external_id, currency FROM ad_account WHERE id = $1', [adAccountId],
   );
   const externalAccountId = acct[0]?.external_id as string | undefined;
   if (!externalAccountId) { out.notes.push('Không tìm thấy tài khoản quảng cáo'); return out; }
+  const currency = (acct[0]?.currency as string | undefined) ?? 'VND';
+
+  // Mẫu quảng cáo đè lên tham số khai sẵn. Mẫu bị xoá thì quay về tham số cũ
+  // chứ không làm cấu hình chết — ghi chú lại để người dùng biết vì sao số
+  // nhắm đối tượng khác với lúc họ đặt.
+  let targeting = {
+    dailyBudgetMicros: p.dailyBudgetMicros,
+    countries: p.countries,
+    ageMin: p.ageMin,
+    ageMax: p.ageMax,
+  };
+  if (p.templateId) {
+    const tpl = await getTemplate(ownerId, p.templateId);
+    if (tpl) {
+      targeting = {
+        dailyBudgetMicros: tpl.dailyBudgetMicros,
+        countries: tpl.countries,
+        ageMin: tpl.ageMin,
+        ageMax: tpl.ageMax,
+      };
+    } else {
+      out.notes.push('Mẫu quảng cáo đã bị xoá — dùng tham số khai trong cấu hình');
+    }
+  }
 
   for (const post of candidates) {
     if (out.created + out.failed >= p.maxPerRun) {
@@ -141,7 +166,7 @@ export async function runPostTrigger(
        ON CONFLICT (ad_account_id, idempotency_key) DO NOTHING
        RETURNING id`,
       [adAccountId, post.id, name, p.mode,
-       `PAUSED · ${Math.round(p.dailyBudgetMicros / 1_000_000).toLocaleString('vi-VN')}đ/ngày`,
+       `PAUSED · ${Math.round(targeting.dailyBudgetMicros / 1_000_000).toLocaleString('vi-VN')}đ/ngày`,
        reason, `posttrigger:${configId}:${post.id}`],
     );
     const mutationId = mut[0]?.id as string | undefined;
@@ -161,10 +186,11 @@ export async function runPostTrigger(
         pageId: p.pageId,
         postId: post.id,
         campaignName: name,
-        dailyBudgetMicros: p.dailyBudgetMicros,
-        countries: p.countries,
-        ageMin: p.ageMin,
-        ageMax: p.ageMax,
+        currency,
+        dailyBudgetMicros: targeting.dailyBudgetMicros,
+        countries: targeting.countries,
+        ageMin: targeting.ageMin,
+        ageMax: targeting.ageMax,
       });
 
       await db.query(

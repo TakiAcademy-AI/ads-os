@@ -7,6 +7,8 @@
 // Chuỗi bốn bước: campaign → adset → creative → ad. Bước nào hỏng thì các bước
 // trước đã tạo rồi — hàm trả về những gì đã tạo để nơi gọi ghi nhật ký và dọn.
 
+import { microsToMinor } from './currency';
+
 const GRAPH = 'https://graph.facebook.com';
 const VERSION = process.env.FB_API_VERSION || 'v23.0';
 const TIMEOUT_MS = 25_000;
@@ -39,39 +41,53 @@ export interface BoostSpec {
   dailyBudgetMicros: number;
   /** Mã quốc gia ISO, vd ['VN']. */
   countries: string[];
+  /**
+   * Tiền tệ của tài khoản quảng cáo.
+   *
+   * Facebook nhận ngân sách theo ĐƠN VỊ NHỎ NHẤT: VND là đồng, USD là cents.
+   * Chia cứng 1.000.000 sẽ đặt $0,15 thay cho $15 — cùng cái bẫy đã vá ở
+   * facebook-write.ts, nên ở đây khai bắt buộc chứ không để mặc định.
+   */
+  currency: string;
   ageMin: number;
   ageMax: number;
 }
 
-async function post<T>(path: string, body: Record<string, string>, token: string, step: AdCreateError['step'], created: Partial<CreatedAd>): Promise<T> {
+async function post<T>(
+  path: string,
+  body: Record<string, string>,
+  token: string,
+  step: AdCreateError['step'],
+  created: Partial<CreatedAd>,
+  validateOnly = false,
+): Promise<T> {
+  const payload = { ...body };
+  // execution_options=validate_only: Facebook kiểm payload và trả lỗi y như
+  // thật NHƯNG KHÔNG TẠO GÌ CẢ. Đây là cách duy nhất thử tham số mà không đụng
+  // vào tài khoản thật — và nó cũng không kích hoạt hệ thống chống lạm dụng.
+  if (validateOnly) payload.execution_options = '["validate_only"]';
+
   const res = await fetch(`${GRAPH}/${VERSION}${path}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams(body).toString(),
+    body: new URLSearchParams(payload).toString(),
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   const json = (await res.json().catch(() => ({}))) as { id?: string; error?: { message?: string; error_user_msg?: string } };
-  if (!res.ok || !json.id) {
+  // Ở chế độ kiểm thử, Facebook trả 200 mà không có id — đó là thành công.
+  if (!res.ok || (!validateOnly && !json.id)) {
     const e = json.error ?? {};
     throw new AdCreateError(e.error_user_msg || e.message || `HTTP ${res.status}`, step, created);
   }
   return json as T;
 }
 
-/**
- * Tạo chiến dịch quảng cáo đẩy một bài viết có sẵn.
- *
- * Mục tiêu cố định là OUTCOME_ENGAGEMENT tối ưu POST_ENGAGEMENT — đây là loại
- * duy nhất chạy được từ một bài viết mà không cần pixel, tập đối tượng tuỳ
- * chỉnh hay trang đích. Các mục tiêu khác đòi thêm cấu hình mà người dùng chưa
- * khai ở đây, đoán bừa thì Facebook từ chối cả chuỗi.
- */
-export async function createBoostCampaign(token: string, spec: BoostSpec): Promise<CreatedAd> {
-  const created: Partial<CreatedAd> = {};
-  const act = spec.adAccountId.startsWith('act_') ? spec.adAccountId : `act_${spec.adAccountId}`;
+function actOf(spec: BoostSpec): string {
+  return spec.adAccountId.startsWith('act_') ? spec.adAccountId : `act_${spec.adAccountId}`;
+}
 
-  // 1. Chiến dịch — LUÔN PAUSED.
-  const campaign = await post<{ id: string }>(`/${act}/campaigns`, {
+function campaignBody(spec: BoostSpec): Record<string, string> {
+  return {
     name: spec.campaignName,
     objective: 'OUTCOME_ENGAGEMENT',
     status: 'PAUSED',
@@ -82,11 +98,42 @@ export async function createBoostCampaign(token: string, spec: BoostSpec): Promi
     // một nhóm nên chia sẻ hay không đều như nhau, nhưng để true thì Facebook
     // được phép lệch khỏi con số người dùng đặt — không nên với tiền người khác.
     is_adset_budget_sharing_enabled: 'false',
-  }, token, 'campaign', created);
+  };
+}
+
+/**
+ * Kiểm payload trước khi tạo, KHÔNG tạo object nào.
+ *
+ * Chỉ kiểm được bước chiến dịch: kiểm nhóm quảng cáo cần campaign_id thật, kiểm
+ * quảng cáo cần adset_id thật. Nhưng bấy nhiêu đã bắt được những thứ hay hỏng
+ * nhất vì chúng thuộc về TÀI KHOẢN chứ không phải payload: chưa gắn thẻ, bị
+ * khoá quyền tạo quảng cáo, token hỏng.
+ *
+ * Nơi gọi phải nói rõ với người dùng rằng đây là kiểm một phần, không phải
+ * bảo chứng cả chuỗi sẽ chạy.
+ */
+export async function validateBoostCampaign(token: string, spec: BoostSpec): Promise<void> {
+  await post(`/${actOf(spec)}/campaigns`, campaignBody(spec), token, 'campaign', {}, true);
+}
+
+/**
+ * Tạo chiến dịch quảng cáo đẩy một bài viết có sẵn.
+ *
+ * Mục tiêu cố định là OUTCOME_ENGAGEMENT tối ưu POST_ENGAGEMENT — đây là loại
+ * duy nhất chạy được từ một bài viết mà không cần pixel, tập đối tượng tuỳ
+ * chỉnh hay trang đích.
+ */
+export async function createBoostCampaign(token: string, spec: BoostSpec): Promise<CreatedAd> {
+  const created: Partial<CreatedAd> = {};
+  const act = actOf(spec);
+
+  // 1. Chiến dịch — LUÔN PAUSED.
+  const campaign = await post<{ id: string }>(
+    `/${act}/campaigns`, campaignBody(spec), token, 'campaign', created);
   created.campaignId = campaign.id;
 
   // 2. Nhóm quảng cáo. Ngân sách đặt ở đây (ABO) vì chiến dịch chỉ có một nhóm.
-  const budget = Math.round(spec.dailyBudgetMicros / 1_000_000);
+  const budget = microsToMinor(spec.dailyBudgetMicros, spec.currency);
   const adset = await post<{ id: string }>(`/${act}/adsets`, {
     name: `${spec.campaignName} — nhóm 1`,
     campaign_id: campaign.id,

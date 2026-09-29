@@ -144,6 +144,14 @@ export const PostTriggerParams = z.object({
   pageName: z.string().default(''),
   keywords: z.array(z.string().min(1)).default([]),
   matchMode: z.enum(['any', 'all']).default('any'),
+  /**
+   * Mẫu quảng cáo dùng chung. Có mẫu thì nhắm đối tượng và ngân sách lấy từ
+   * mẫu, ba trường dưới bị bỏ qua. Rỗng = dùng tham số khai ngay tại đây.
+   *
+   * Giữ cả hai đường để cấu hình tạo trước migration 008 vẫn chạy nguyên vẹn,
+   * và để mẫu bị xoá không làm cấu hình nào chết.
+   */
+  templateId: z.string().default(''),
   /** Ngân sách/ngày cho chiến dịch sinh ra, micros. Mặc định 50.000đ. */
   dailyBudgetMicros: z.number().int().positive().default(50_000_000_000),
   countries: z.array(z.string().length(2)).min(1).default(['VN']),

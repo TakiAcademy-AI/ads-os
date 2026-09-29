@@ -26,6 +26,13 @@ const GROUPS: { group: string; items: Item[] }[] = [
     ],
   },
   {
+    group: 'Đăng quảng cáo',
+    items: [
+      { href: '/dang-quang-cao', label: 'Đăng nhanh' },
+      { href: '/mau-quang-cao', label: 'Mẫu quảng cáo' },
+    ],
+  },
+  {
     group: 'Hệ thống',
     items: [
       { href: '/log', label: 'Nhật ký thay đổi' },

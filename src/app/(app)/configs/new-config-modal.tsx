@@ -117,12 +117,21 @@ export function NewConfigModal({
   const [maxPerRun, setMaxPerRun] = useState<number>(pick(ep.maxPerRun, 2));
   const [ageMin, setAgeMin] = useState<number>(pick(ep.ageMin, 18));
   const [ageMax, setAgeMax] = useState<number>(pick(ep.ageMax, 65));
+  const [templateId, setTemplateId] = useState<string>(pick(ep.templateId, ''));
+  const [templates, setTemplates] = useState<{ id: string; name: string;
+    countries: string[]; ageMin: number; ageMax: number; dailyBudgetMicros: number }[]>([]);
 
   // Mỗi từ khoá một dòng hoặc ngăn bằng dấu phẩy — người dùng gõ kiểu nào cũng được.
   const keywords = useMemo(
     () => keywordText.split(/[\n,]/).map((k) => k.trim()).filter(Boolean),
     [keywordText],
   );
+
+  useEffect(() => {
+    if (kind !== 'post_trigger') return;
+    fetch('/api/templates').then((r) => r.json())
+      .then((d) => setTemplates(d.templates ?? [])).catch(() => {});
+  }, [kind]);
 
   useEffect(() => {
     if (kind !== 'post_trigger' || pages.length > 0 || pagesLoading) return;
@@ -170,6 +179,9 @@ export function NewConfigModal({
           pageId,
           pageName: pages.find((p) => p.pageId === pageId)?.name ?? '',
           keywords, matchMode,
+          templateId,
+          // Vẫn gửi tham số khai sẵn kể cả khi có mẫu: mẫu bị xoá thì cấu hình
+          // quay về đây thay vì chết.
           dailyBudgetMicros: Math.round(postBudget * 1_000_000),
           countries: ['VN'],
           ageMin, ageMax,
@@ -457,9 +469,32 @@ export function NewConfigModal({
                   </div>
                 </Section>
 
+                <Section title="Mẫu quảng cáo"
+                         hint="Chọn mẫu thì nhắm đối tượng và ngân sách lấy từ mẫu, ba ô dưới bị bỏ qua. Sửa mẫu là mọi cấu hình dùng nó đổi theo.">
+                  <select style={inputStyle} value={templateId}
+                          onChange={(e) => setTemplateId(e.target.value)}>
+                    <option value="">Không dùng mẫu — khai riêng ở dưới</option>
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} · {Math.round(t.dailyBudgetMicros / 1_000_000).toLocaleString('vi-VN')}đ/ngày
+                        · {t.ageMin}-{t.ageMax} tuổi
+                      </option>
+                    ))}
+                  </select>
+                  {templates.length === 0 && (
+                    <div className="note" style={{ maxWidth: 'none', marginTop: 7 }}>
+                      Chưa có mẫu nào. Tạo ở tab <b>Mẫu quảng cáo</b> để dùng chung với
+                      chức năng Đăng quảng cáo nhanh.
+                    </div>
+                  )}
+                </Section>
+
                 <Section title="Chiến dịch sinh ra"
-                         hint="Mục tiêu cố định là Tương tác bài viết — đây là loại duy nhất chạy được thẳng từ một bài đăng mà không cần pixel hay trang đích.">
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 9 }}>
+                         hint={templateId
+                           ? 'Đang dùng mẫu — ba ô này bị bỏ qua, chỉ giữ làm dự phòng nếu mẫu bị xoá.'
+                           : 'Mục tiêu cố định là Tương tác bài viết — loại duy nhất chạy thẳng từ một bài đăng mà không cần pixel hay trang đích.'}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 9,
+                                opacity: templateId ? .45 : 1 }}>
                     <div>
                       <div style={{ fontSize: 11.5, color: 'var(--dim)', marginBottom: 4 }}>Ngân sách/ngày (đ)</div>
                       <input type="number" min={1000} step={1000} value={postBudget}
