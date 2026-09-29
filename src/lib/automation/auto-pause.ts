@@ -1,17 +1,22 @@
-// Đánh giá chiến dịch theo ngưỡng CPA và ghi đề xuất vào ad_mutation.
+// Đánh giá chiến dịch theo ngưỡng CPA, ghi nhật ký, và tắt thật nếu được phép.
 //
-// KHÔNG gọi API Facebook. Ở chế độ 'live' cũng chỉ ghi nhật ký rồi báo lỗi —
-// muốn tắt thật phải có scope ads_management, và phải qua một lớp riêng có
-// xác nhận. Lớp này chỉ QUYẾT ĐỊNH, không THỰC THI.
+// Ở chế độ 'dry_run' (mặc định) chỉ ghi đề xuất, không chạm vào Facebook.
+// Chỉ khi cấu hình đặt mode='live' mới gọi lệnh ghi — và vẫn phải qua đủ bốn
+// guard trước đó. Quyền ads_management là điều kiện CẦN, không phải điều kiện ĐỦ.
 
 import { db } from '../db';
 import { todayVn } from '../account';
+import { readToken } from '../ads/token';
+import { setCampaignStatus, readCampaignStatus, FacebookWriteError } from '../ads/facebook-write';
 import { listCampaigns, type CampaignRow } from '../queries/ads';
 import { getPauseConfig } from '../queries/configs';
 
 export interface PauseRunResult {
   evaluated: number;
   proposed: number;
+  /** Đã tắt THẬT trên Facebook. */
+  applied: number;
+  failed: number;
   blocked: number;
   skipped: number;
   notes: string[];
@@ -22,11 +27,12 @@ const BLOCKED = {
   protected: 'protected_campaign',
   blastRadius: 'blast_radius',
   notMeasurable: 'not_measurable',
-  liveNotAllowed: 'live_write_unavailable',
 } as const;
 
 export async function runAutoPause(adAccountId: string): Promise<PauseRunResult> {
-  const out: PauseRunResult = { evaluated: 0, proposed: 0, blocked: 0, skipped: 0, notes: [] };
+  const out: PauseRunResult = {
+    evaluated: 0, proposed: 0, applied: 0, failed: 0, blocked: 0, skipped: 0, notes: [],
+  };
 
   const cfg = await getPauseConfig(adAccountId);
   if (!cfg) {
@@ -35,6 +41,8 @@ export async function runAutoPause(adAccountId: string): Promise<PauseRunResult>
   }
 
   const today = todayVn();
+  // Chỉ đọc token khi thật sự cần ghi — chế độ chạy thử không cần chạm tới nó.
+  const token = cfg.params.mode === 'live' ? await readToken(adAccountId) : null;
   const campaigns = await listCampaigns(adAccountId, 30, today);
   const protectedIds = new Set(cfg.params.protectedCampaignIds);
 
@@ -100,34 +108,67 @@ export async function runAutoPause(adAccountId: string): Promise<PauseRunResult>
     }
 
     // Tới đây là đủ điều kiện tắt.
-    if (cfg.params.mode === 'live') {
-      // Chưa có lớp ghi. Ghi lại rõ ràng thay vì im lặng bỏ qua — người bật
-      // chế độ 'live' phải thấy được vì sao không có gì xảy ra.
-      const wrote = await record(adAccountId, c, today, {
-        status: 'blocked',
-        mode: 'live',
-        blockedBy: BLOCKED.liveNotAllowed,
-        reason: `Đủ điều kiện tắt nhưng hệ thống chưa có quyền ghi lên Facebook `
-          + `(cần scope ads_management). ${a.reason}`,
-      });
-      if (wrote) out.blocked++; else out.skipped++;
-      continue;
-    }
-
-    const wrote = await record(adAccountId, c, today, {
+    //
+    // GHI NHẬT KÝ TRƯỚC, GỌI API SAU. Nếu làm ngược lại mà tiến trình chết giữa
+    // chừng thì có một chiến dịch bị tắt mà không bản ghi nào truy được.
+    const mutationId = await record(adAccountId, c, today, {
       status: 'proposed',
-      mode: 'dry_run',
+      mode: cfg.params.mode,
       blockedBy: null,
       reason: a.reason,
     });
-    if (wrote) { out.proposed++; pausesThisRun++; } else out.skipped++;
+
+    if (!mutationId) { out.skipped++; continue; }
+    pausesThisRun++;
+
+    if (cfg.params.mode === 'dry_run') { out.proposed++; continue; }
+
+    // ── Ghi thật ──
+    if (!token) {
+      await fail(mutationId, 'Không đọc được token của tài khoản');
+      out.failed++;
+      continue;
+    }
+
+    try {
+      await setCampaignStatus(token, c.externalId, 'PAUSED');
+
+      // Không tin response — đọc lại trạng thái từ Facebook để xác nhận.
+      const after = await readCampaignStatus(token, c.externalId);
+      if (after && after.toUpperCase() !== 'PAUSED') {
+        await fail(mutationId, `Đã gọi lệnh tắt nhưng Facebook vẫn báo trạng thái "${after}"`);
+        out.failed++;
+        continue;
+      }
+
+      await db.query(
+        `UPDATE ad_mutation SET status = 'applied', applied_at = NOW(),
+                                after_value = $2
+         WHERE id = $1`,
+        [mutationId, after ?? 'PAUSED'],
+      );
+      out.applied++;
+    } catch (e) {
+      const msg = e instanceof FacebookWriteError
+        ? `${e.message}${e.isPermission ? ' (thiếu quyền hoặc token hỏng — cần kết nối lại)' : ''}`
+        : e instanceof Error ? e.message : String(e);
+      await fail(mutationId, msg);
+      out.failed++;
+    }
   }
 
   return out;
 }
 
+async function fail(mutationId: string, message: string): Promise<void> {
+  await db.query(
+    `UPDATE ad_mutation SET status = 'failed', error_message = $2 WHERE id = $1`,
+    [mutationId, message],
+  );
+}
+
 /**
- * Ghi một dòng nhật ký. Trả false nếu đã có bản ghi cho cùng chiến dịch trong
+ * Ghi một dòng nhật ký. Trả null nếu đã có bản ghi cho cùng chiến dịch trong
  * ngày — cron chạy 30 phút một lần, không chặn thì mỗi ngày ghi 48 dòng giống
  * hệt nhau và nhật ký thành vô dụng.
  */
@@ -141,16 +182,17 @@ async function record(
     blockedBy: string | null;
     reason: string;
   },
-): Promise<boolean> {
+): Promise<string | null> {
   const key = `${c.externalId}:pause:${today}`;
-  const { rowCount } = await db.query(
+  const { rows } = await db.query(
     `INSERT INTO ad_mutation
        (ad_account_id, campaign_id, target_external_id, target_name, operation,
         mode, status, before_value, after_value, reason, blocked_by,
         cpa_raw_micros, cpa_settled_micros, target_cpa_micros, idempotency_key)
      VALUES ($1,$2,$3,$4,'pause',$5::ad_mutation_mode_t,$6::ad_mutation_status_t,
              'ACTIVE','PAUSED',$7,$8,$9,$10,$11,$12)
-     ON CONFLICT (ad_account_id, idempotency_key) DO NOTHING`,
+     ON CONFLICT (ad_account_id, idempotency_key) DO NOTHING
+     RETURNING id`,
     [
       adAccountId, c.id, c.externalId, c.name, o.mode, o.status, o.reason, o.blockedBy,
       Math.round(c.assessment.cpaRawMicros),
@@ -159,5 +201,5 @@ async function record(
       key,
     ],
   );
-  return (rowCount ?? 0) > 0;
+  return rows[0]?.id ?? null;
 }

@@ -64,9 +64,10 @@ export async function runDueConfigs(): Promise<CronResult> {
           : (r.error ?? 'Đồng bộ thất bại');
       } else if (c.kind === 'auto_pause') {
         const r = await runAutoPause(c.ad_account_id);
-        ok = true;
-        message = `xét ${r.evaluated} chiến dịch · ${r.proposed} đề xuất tắt · `
-          + `${r.blocked} bị guard chặn · ${r.skipped} đã ghi trước đó`
+        ok = r.failed === 0;
+        message = `xét ${r.evaluated} chiến dịch · ${r.applied} ĐÃ TẮT THẬT · `
+          + `${r.proposed} đề xuất · ${r.failed} lỗi · ${r.blocked} bị guard chặn · `
+          + `${r.skipped} đã ghi trước đó`
           + (r.notes.length ? ` · ${r.notes.join('; ')}` : '');
       } else {
         // budget_schedule / post_trigger chưa có lớp thực thi. Ghi rõ thay vì
