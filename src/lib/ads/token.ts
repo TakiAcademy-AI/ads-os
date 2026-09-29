@@ -40,9 +40,3 @@ export async function readToken(adAccountId: string): Promise<string | null> {
     return null;
   }
 }
-
-/** Che token khi hiển thị hoặc ghi log. */
-export function maskToken(token: string): string {
-  if (token.length <= 10) return '••••';
-  return `${token.slice(0, 6)}…${token.slice(-4)}`;
-}

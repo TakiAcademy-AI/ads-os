@@ -46,9 +46,6 @@ export interface Kpis {
   mutationsApplied: number;
   /** Số lần bot bị guard chặn lại */
   mutationsBlocked: number;
-  /** Campaign được guard giữ lại khỏi bị tắt oan */
-  savedCount: number;
-  savedSpendMicros: number;
 }
 
 export async function getKpis(accountId: string, days: number): Promise<Kpis> {
@@ -82,8 +79,6 @@ export async function getKpis(accountId: string, days: number): Promise<Kpis> {
     cpaMicros: conv > 0 ? Math.round(spend / conv) : 0,
     mutationsApplied: mut[0]?.applied ?? 0,
     mutationsBlocked: mut[0]?.blocked ?? 0,
-    savedCount: 0,
-    savedSpendMicros: 0,
   };
 }
 

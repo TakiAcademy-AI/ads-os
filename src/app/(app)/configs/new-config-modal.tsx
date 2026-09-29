@@ -98,7 +98,6 @@ export function NewConfigModal({
           })),
           protectedCampaignIds: protectedIds,
           maxPausesPerRun: maxPauses,
-          notifyOnly: false,
         };
 
     const res = await fetch('/api/configs', {

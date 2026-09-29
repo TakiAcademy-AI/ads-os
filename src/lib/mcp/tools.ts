@@ -8,6 +8,7 @@
 import type { createMcpHandler } from 'mcp-handler';
 import { z } from 'zod';
 import { db } from '../db';
+import { logRequest } from './auth';
 import { todayVn } from '../account';
 import {
   getKpis,
@@ -66,18 +67,66 @@ type McpServer = Parameters<Parameters<typeof createMcpHandler>[0]>[0];
  * các phiên bản, còn thứ ta cần chỉ là một chuỗi nằm sâu bên trong — đọc phòng
  * thủ thì không vỡ khi SDK nâng cấp.
  */
-function ownerOf(ctx: unknown): string | null {
+function authExtra(ctx: unknown): Record<string, unknown> | null {
   const obj = (v: unknown): Record<string, unknown> | null =>
     typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : null;
 
   const root = obj(ctx);
   if (!root) return null;
-
   // mcp-handler 2.x lồng dưới ctx.http.authInfo; bản cũ để thẳng ctx.authInfo.
   // Thử cả hai để nâng cấp SDK không làm rơi danh tính một cách im lặng.
   const auth = obj(obj(root.http)?.authInfo) ?? obj(root.authInfo);
-  const owner = obj(auth?.extra)?.ownerId;
-  return typeof owner === 'string' ? owner : null;
+  return obj(auth?.extra);
+}
+
+/**
+ * Chủ sở hữu của request HIỆN TẠI, lấy từ key đã xác thực.
+ *
+ * Phải đọc theo TỪNG lời gọi, không được nướng vào lúc đăng ký tool:
+ * createMcpHandler chạy một lần lúc nạp module và dùng chung cho mọi request,
+ * nên owner cố định sẽ làm key của người này đọc được dữ liệu người kia.
+ */
+function ownerOf(ctx: unknown): string | null {
+  const v = authExtra(ctx)?.ownerId;
+  return typeof v === 'string' ? v : null;
+}
+
+function keyIdOf(ctx: unknown): string | null {
+  const v = authExtra(ctx)?.keyId;
+  return typeof v === 'string' ? v : null;
+}
+
+// `type` chứ không phải `interface`: SDK đòi kiểu có index signature
+// ({ [x: string]: unknown; content: ... }). TypeScript suy ngầm index signature
+// cho type alias nhưng KHÔNG suy cho interface — dùng interface là không gán được.
+type ToolResult = {
+  content: { type: 'text'; text: string }[];
+  structuredContent?: Record<string, unknown>;
+};
+
+/**
+ * Bọc handler để ghi mcp_request_log.
+ *
+ * Trang /mcp có bảng "Request gần đây" đọc từ bảng này — không bọc thì bảng
+ * trống vĩnh viễn, giao diện hứa một thứ không bao giờ tới. Ghi log không
+ * được chặn kết quả nên cố ý không await.
+ */
+function logged<A>(
+  name: string,
+  fn: (args: A, ctx: unknown) => Promise<ToolResult>,
+): (args: A, ctx: unknown) => Promise<ToolResult> {
+  return async (args, ctx) => {
+    const t0 = Date.now();
+    try {
+      const out = await fn(args, ctx);
+      void logRequest(keyIdOf(ctx), name, true, Date.now() - t0);
+      return out;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      void logRequest(keyIdOf(ctx), name, false, Date.now() - t0, msg);
+      throw e;
+    }
+  };
 }
 
 const noAuth = {
@@ -97,7 +146,7 @@ export function registerTools(server: McpServer): void {
         'Dùng khi cần biết chiến dịch nào THẬT SỰ đang lỗ.',
       inputSchema: { days: DAYS, accountId: ACCOUNT },
     },
-    async ({ days, accountId }, ctx: unknown) => {
+    logged('ads_list_campaigns', async ({ days, accountId }: { days?: number; accountId?: string }, ctx: unknown) => {
       const ownerId = ownerOf(ctx);
       if (!ownerId) return noAuth;
       const acct = await resolveAccount(ownerId, accountId);
@@ -141,7 +190,7 @@ export function registerTools(server: McpServer): void {
           })),
         },
       };
-    },
+    }),
   );
 
   // ─── ads_get_kpis ──────────────────────────────────────────────────────
@@ -152,7 +201,7 @@ export function registerTools(server: McpServer): void {
       description: 'Chi tiêu, kết quả, CPA trung bình, và số lần bot đã tác động / bị guard chặn.',
       inputSchema: { days: DAYS, accountId: ACCOUNT },
     },
-    async ({ days, accountId }, ctx: unknown) => {
+    logged('ads_get_kpis', async ({ days, accountId }: { days?: number; accountId?: string }, ctx: unknown) => {
       const ownerId = ownerOf(ctx);
       if (!ownerId) return noAuth;
       const acct = await resolveAccount(ownerId, accountId);
@@ -168,7 +217,7 @@ export function registerTools(server: McpServer): void {
         }],
         structuredContent: { days: days ?? 30, ...k },
       };
-    },
+    }),
   );
 
   // ─── ads_list_mutations ────────────────────────────────────────────────
@@ -184,7 +233,7 @@ export function registerTools(server: McpServer): void {
         accountId: ACCOUNT,
       },
     },
-    async ({ limit, accountId }, ctx: unknown) => {
+    logged('ads_list_mutations', async ({ limit, accountId }: { limit?: number; accountId?: string }, ctx: unknown) => {
       const ownerId = ownerOf(ctx);
       if (!ownerId) return noAuth;
       const acct = await resolveAccount(ownerId, accountId);
@@ -201,7 +250,7 @@ export function registerTools(server: McpServer): void {
         content: [{ type: 'text', text: lines.join('\n') || 'Chưa có thay đổi nào.' }],
         structuredContent: { mutations: rows },
       };
-    },
+    }),
   );
 
   // ─── ads_attribution_curve ─────────────────────────────────────────────
@@ -214,7 +263,7 @@ export function registerTools(server: McpServer): void {
         'chuyển đổi cuối cùng. Dùng để chọn attributionDays thay vì đoán.',
       inputSchema: { accountId: ACCOUNT },
     },
-    async ({ accountId }, ctx: unknown) => {
+    logged('ads_attribution_curve', async ({ accountId }: { accountId?: string }, ctx: unknown) => {
       const ownerId = ownerOf(ctx);
       if (!ownerId) return noAuth;
       const acct = await resolveAccount(ownerId, accountId);
@@ -243,6 +292,6 @@ export function registerTools(server: McpServer): void {
         }],
         structuredContent: { ...curve },
       };
-    },
+    }),
   );
 }

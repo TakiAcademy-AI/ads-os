@@ -60,8 +60,6 @@ export const AutoPauseParams = z.object({
   protectedCampaignIds: z.array(z.string().uuid()).default([]),
   /** Trần số chiến dịch được tắt trong một lượt chạy. */
   maxPausesPerRun: z.number().int().min(1).max(50).default(3),
-  /** Gửi cảnh báo Telegram khi vượt ngưỡng, kể cả lúc không tắt. */
-  notifyOnly: z.boolean().default(false),
 });
 
 export const MetricSyncParams = z.object({

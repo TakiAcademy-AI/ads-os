@@ -1,6 +1,7 @@
 import { requireUser } from '@/lib/session';
 import { getCurrentAccountId, todayVn } from '@/lib/account';
-import { getKpis, listCampaigns, getAttributionCurve } from '@/lib/queries/ads';
+import { getKpis, listCampaigns, getAttributionCurve, getTrend } from '@/lib/queries/ads';
+import { TrendChart } from '@/components/trend-chart';
 import { vnd, num } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -22,10 +23,11 @@ export default async function DashboardPage() {
     );
   }
 
-  const [kpis, campaigns, curve] = await Promise.all([
+  const [kpis, campaigns, curve, trend] = await Promise.all([
     getKpis(accountId, 30),
     listCampaigns(accountId, 30, todayVn()),
     getAttributionCurve(accountId),
+    getTrend(accountId, 30),
   ]);
 
   const saved = campaigns.filter((c) => c.assessment.verdict === 'saved');
@@ -66,6 +68,14 @@ export default async function DashboardPage() {
           <div className="v num">{saved.length}</div>
           <div className="s">{saved.length > 0 ? `${vnd(savedSpend)} chi tiêu` : 'chưa có trường hợp nào'}</div>
         </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-head">
+          <b>Chi tiêu và CPA theo ngày</b>
+          <span>cột: chi tiêu · đường: CPA</span>
+        </div>
+        <TrendChart data={trend} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.35fr 1fr', gap: 16 }}>
