@@ -98,10 +98,10 @@ export async function createBoostCampaign(token: string, spec: BoostSpec): Promi
     // nhóm. Các chiến lược khác đòi khai giá thầu trần — con số người dùng
     // không nhập ở đây, và đoán sai thì quảng cáo không phân phối được.
     bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
-    // OUTCOME_ENGAGEMENT gộp nhiều thứ dưới một tên: tin nhắn, lượt xem video,
-    // tương tác bài, cả chuyển đổi. Thiếu promoted_object thì Facebook mặc định
-    // hiểu là chuyển đổi và đòi pixel — lỗi báo ra không hề nhắc tới Page.
-    promoted_object: JSON.stringify({ page_id: spec.pageId }),
+    // CỐ Ý không đặt promoted_object. Nghe thì hợp lý — khai rõ quảng cáo cho
+    // Page nào — nhưng với POST_ENGAGEMENT thì Facebook từ chối thẳng:
+    // "không thể dùng mục tiêu hiệu quả đã chọn cho mục tiêu chiến dịch".
+    // promoted_object{page_id} chỉ dành cho PAGE_LIKES.
     targeting: JSON.stringify({
       geo_locations: { countries: spec.countries },
       age_min: spec.ageMin,
