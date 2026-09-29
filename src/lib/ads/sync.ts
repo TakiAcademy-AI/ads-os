@@ -35,7 +35,21 @@ export async function syncAccount(
 ): Promise<SyncResult> {
   const started = Date.now();
   const lookback = opts.lookbackDays ?? 30;
-  const level = opts.level ?? 'campaign';
+
+  // CHỐT CỨNG ở cấp chiến dịch cho tới khi đường ghi hỗ trợ cấp sâu hơn.
+  //
+  // Câu INSERT phía dưới ghi ad_external_id = NULL và dùng ON CONFLICT ...
+  // DO UPDATE SET (ghi đè, không cộng dồn). Ở cấp 'ad', Facebook trả NHIỀU
+  // dòng cho mỗi (chiến dịch, ngày) — mỗi quảng cáo một dòng — nên tất cả rơi
+  // vào cùng một khoá xung đột và mỗi dòng xoá kết quả của dòng trước. Chiến
+  // dịch có 3 quảng cáo tiêu 10k/20k/30k sẽ lưu thành 30k thay vì 60k.
+  //
+  // Mất chi tiêu kéo theo CPA thấp giả, và guard sẽ KHÔNG tắt chiến dịch đang
+  // thật sự lỗ. Thà kéo ít dữ liệu còn hơn kéo về dữ liệu sai.
+  const level = 'campaign';
+  if (opts.level && opts.level !== 'campaign') {
+    console.warn(`[sync] bỏ qua level='${opts.level}', đường ghi chỉ hỗ trợ cấp chiến dịch`);
+  }
 
   const base: SyncResult = {
     ok: false, campaigns: 0, metricRows: 0, revisionRows: 0, durationMs: 0,

@@ -288,15 +288,22 @@ export function NewConfigModal({
                   </select>
                 </Section>
 
-                <Section title="Cấp dữ liệu" hint="Càng sâu càng tốn quota API của nền tảng.">
+                <Section title="Cấp dữ liệu"
+                         hint="Hiện chỉ hỗ trợ cấp chiến dịch. Cấp sâu hơn cần đường ghi riêng — chọn được mà ghi sai thì còn tệ hơn không có.">
                   <div style={{ display: 'flex', gap: 8 }}>
-                    {(['campaign', 'adset', 'ad'] as const).map((l) => (
-                      <button key={l} onClick={() => setLevel(l)}
-                              className={level === l ? 'btn' : 'btn btn-ghost'}
-                              style={{ flex: 1, fontSize: 12.5 }}>
-                        {l === 'campaign' ? 'Chiến dịch' : l === 'adset' ? 'Nhóm QC' : 'Quảng cáo'}
-                      </button>
-                    ))}
+                    {(['campaign', 'adset', 'ad'] as const).map((l) => {
+                      const ready = l === 'campaign';
+                      return (
+                        <button key={l} onClick={() => ready && setLevel(l)} disabled={!ready}
+                                className={level === l ? 'btn' : 'btn btn-ghost'}
+                                style={{ flex: 1, fontSize: 12.5,
+                                         cursor: ready ? 'pointer' : 'not-allowed',
+                                         opacity: ready ? 1 : .45 }}>
+                          {l === 'campaign' ? 'Chiến dịch' : l === 'adset' ? 'Nhóm QC' : 'Quảng cáo'}
+                          {!ready && <span style={{ fontSize: 9, marginLeft: 5 }}>SẮP CÓ</span>}
+                        </button>
+                      );
+                    })}
                   </div>
                 </Section>
 
