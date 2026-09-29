@@ -77,6 +77,11 @@ export async function createBoostCampaign(token: string, spec: BoostSpec): Promi
     status: 'PAUSED',
     // Bắt buộc từ 2021. Rỗng = không thuộc nhóm nhà ở/việc làm/tín dụng.
     special_ad_categories: '[]',
+    // Bắt buộc khi ngân sách đặt ở cấp nhóm (ABO) chứ không phải cấp chiến dịch.
+    // false = không cho các nhóm mượn ngân sách của nhau. Chiến dịch này chỉ có
+    // một nhóm nên chia sẻ hay không đều như nhau, nhưng để true thì Facebook
+    // được phép lệch khỏi con số người dùng đặt — không nên với tiền người khác.
+    is_adset_budget_sharing_enabled: 'false',
   }, token, 'campaign', created);
   created.campaignId = campaign.id;
 
@@ -88,6 +93,15 @@ export async function createBoostCampaign(token: string, spec: BoostSpec): Promi
     daily_budget: String(budget),
     billing_event: 'IMPRESSIONS',
     optimization_goal: 'POST_ENGAGEMENT',
+    // Đấu thầu tự động. Phải đặt ở ĐÂY chứ không phải ở chiến dịch: Facebook
+    // chỉ nhận bid_strategy ở cấp nào giữ ngân sách, mà ngân sách của ta ở cấp
+    // nhóm. Các chiến lược khác đòi khai giá thầu trần — con số người dùng
+    // không nhập ở đây, và đoán sai thì quảng cáo không phân phối được.
+    bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
+    // OUTCOME_ENGAGEMENT gộp nhiều thứ dưới một tên: tin nhắn, lượt xem video,
+    // tương tác bài, cả chuyển đổi. Thiếu promoted_object thì Facebook mặc định
+    // hiểu là chuyển đổi và đòi pixel — lỗi báo ra không hề nhắc tới Page.
+    promoted_object: JSON.stringify({ page_id: spec.pageId }),
     targeting: JSON.stringify({
       geo_locations: { countries: spec.countries },
       age_min: spec.ageMin,

@@ -149,6 +149,12 @@ export async function runPostTrigger(
 
     if (p.mode === 'dry_run') { out.created++; continue; }
 
+    // Giãn nhịp giữa các lần tạo. Facebook có hệ thống chống lạm dụng riêng,
+    // tách khỏi rate limit thông thường: tạo nhiều chiến dịch liên tiếp trong
+    // vài giây sẽ bị khoá quyền tạo quảng cáo tạm thời với thông báo "nghi ngờ
+    // truy cập trái phép". Đã gặp thật trong lúc kiểm thử.
+    if (out.created > 0) await new Promise((r) => setTimeout(r, 5_000));
+
     try {
       const made = await createBoostCampaign(token!, {
         adAccountId: externalAccountId,
