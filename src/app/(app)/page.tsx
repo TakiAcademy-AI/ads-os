@@ -2,6 +2,7 @@ import { requireUser } from '@/lib/session';
 import { getCurrentAccountId, todayVn } from '@/lib/account';
 import { getKpis, listCampaigns, getAttributionCurve, getTrend } from '@/lib/queries/ads';
 import { TrendChart } from '@/components/trend-chart';
+import { SyncButton } from './connections/sync-button';
 import { vnd, num } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -42,7 +43,7 @@ export default async function DashboardPage() {
           <h1>Bảng điều khiển</h1>
           <p>Facebook Ads · 30 ngày gần nhất</p>
         </div>
-        <button className="btn">Đồng bộ ngay</button>
+        <SyncButton accountId={accountId} />
       </div>
 
       <div className="kpis">

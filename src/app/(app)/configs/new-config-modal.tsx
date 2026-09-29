@@ -43,17 +43,19 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
 }
 
 export function NewConfigModal({
-  accounts, campaigns, onClose, onCreated,
+  accounts, campaigns, currentAccountId, onClose, onCreated,
 }: {
   accounts: Account[];
   campaigns: Record<string, Campaign[]>;
+  /** Tài khoản đang xem ở sidebar — mặc định tạo cấu hình cho chính nó. */
+  currentAccountId: string | null;
   onClose: () => void;
   onCreated: () => void;
 }) {
   const [kind, setKind] = useState<AutomationKind>('metric_sync');
   const [platform, setPlatform] = useState<Platform>('facebook');
   const [name, setName] = useState('');
-  const [accountId, setAccountId] = useState(accounts[0]?.id ?? '');
+  const [accountId, setAccountId] = useState(currentAccountId ?? accounts[0]?.id ?? '');
   const [interval, setIntervalMin] = useState(30);
 
   // metric_sync

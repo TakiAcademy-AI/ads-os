@@ -1,7 +1,9 @@
 import { requireUser } from '@/lib/session';
 import { getCurrentAccountId, todayVn } from '@/lib/account';
 import { listCampaigns, type CampaignRow } from '@/lib/queries/ads';
+import { getPauseConfig } from '@/lib/queries/configs';
 import { vnd, num, OBJECTIVE_LABEL } from '@/lib/format';
+import { SyncButton } from '../connections/sync-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,7 +62,10 @@ export default async function CampaignsPage() {
     );
   }
 
-  const campaigns = await listCampaigns(accountId, 30, todayVn());
+  const [campaigns, pauseConfig] = await Promise.all([
+    listCampaigns(accountId, 30, todayVn()),
+    getPauseConfig(accountId),
+  ]);
   const saved = campaigns.filter((c) => c.assessment.verdict === 'saved');
 
   return (
@@ -70,8 +75,19 @@ export default async function CampaignsPage() {
           <h1>Chiến dịch</h1>
           <p>Facebook Ads · 30 ngày · {campaigns.length} chiến dịch</p>
         </div>
-        <button className="btn">Đồng bộ ngay</button>
+        <SyncButton accountId={accountId} />
       </div>
+
+      {!pauseConfig && (
+        <div style={{
+          background: 'var(--amb-soft)', color: 'var(--amb)', fontSize: 12.5,
+          padding: '11px 14px', borderRadius: 'var(--r)', marginBottom: 14, lineHeight: 1.5,
+        }}>
+          Tài khoản này chưa có cấu hình <b>Tắt ads tự động</b> nào đang bật, nên bảng dưới
+          dùng ngưỡng mặc định (tin nhắn 120.000đ · lead 80.000đ). Vào Cấu hình để đặt
+          ngưỡng riêng — cấu hình ở trạng thái nháp hoặc tạm dừng sẽ không có tác dụng.
+        </div>
+      )}
 
       <div className="card">
         <div className="card-head">

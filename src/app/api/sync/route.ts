@@ -24,11 +24,12 @@ export async function POST(req: Request) {
   );
   if (!rows[0]) return NextResponse.json({ error: 'Không tìm thấy tài khoản' }, { status: 404 });
 
-  // Nếu có cấu hình metric_sync thì dùng tham số của nó.
+  // Chỉ cấu hình ĐANG BẬT mới quyết định tham số. Cấu hình nháp hoặc đã tạm
+  // dừng mà vẫn có tác dụng thì người dùng không cách nào biết vì sao số ra khác.
   const { rows: cfg } = await db.query(
     `SELECT params FROM automation_config
-     WHERE ad_account_id = $1 AND kind = 'metric_sync'
-     ORDER BY (status = 'active') DESC, updated_at DESC LIMIT 1`,
+     WHERE ad_account_id = $1 AND kind = 'metric_sync' AND status = 'active'
+     ORDER BY updated_at DESC LIMIT 1`,
     [parsed.data.adAccountId],
   );
   const p = (cfg[0]?.params ?? {}) as Record<string, unknown>;

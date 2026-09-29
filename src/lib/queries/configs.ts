@@ -15,15 +15,19 @@ export interface AutomationConfigRow {
   createdAt: string;
 }
 
-export async function listConfigs(ownerId: string): Promise<AutomationConfigRow[]> {
+/** Cấu hình của một tài khoản. Bỏ trống accountId thì lấy của mọi tài khoản. */
+export async function listConfigs(
+  ownerId: string,
+  accountId?: string | null,
+): Promise<AutomationConfigRow[]> {
   const { rows } = await db.query(
     `SELECT c.id, c.ad_account_id, a.name AS account_name, c.kind, c.name, c.status,
             c.interval_minutes, c.params, c.last_run_at, c.last_error, c.created_at
      FROM automation_config c
      JOIN ad_account a ON a.id = c.ad_account_id
-     WHERE c.owner_id = $1
+     WHERE c.owner_id = $1 AND ($2::uuid IS NULL OR c.ad_account_id = $2)
      ORDER BY c.created_at DESC`,
-    [ownerId],
+    [ownerId, accountId ?? null],
   );
   return rows.map((r) => ({
     id: r.id,
@@ -40,11 +44,15 @@ export async function listConfigs(ownerId: string): Promise<AutomationConfigRow[
   }));
 }
 
-export async function countByKind(ownerId: string): Promise<Record<AutomationKind, number>> {
+export async function countByKind(
+  ownerId: string,
+  accountId?: string | null,
+): Promise<Record<AutomationKind, number>> {
   const { rows } = await db.query(
     `SELECT kind, COUNT(*)::int n FROM automation_config
-     WHERE owner_id = $1 GROUP BY kind`,
-    [ownerId],
+     WHERE owner_id = $1 AND ($2::uuid IS NULL OR ad_account_id = $2)
+     GROUP BY kind`,
+    [ownerId, accountId ?? null],
   );
   const out = {
     metric_sync: 0, auto_pause: 0, budget_schedule: 0, post_trigger: 0,
@@ -54,18 +62,19 @@ export async function countByKind(ownerId: string): Promise<Record<AutomationKin
 }
 
 /**
- * Cấu hình auto_pause đang hiệu lực của một tài khoản.
+ * Cấu hình auto_pause ĐANG BẬT của một tài khoản.
  *
- * Lấy cả bản 'paused' để giao diện còn hiện ngưỡng đang đặt — nhưng chỉ bản
- * 'active' mới được phép tác động lên tài khoản. Nơi gọi phải tự kiểm `status`.
+ * Chỉ lấy bản 'active'. Trước đây lấy cả 'paused'/'draft' rồi để nơi gọi tự
+ * kiểm status — nhưng không nơi nào kiểm, nên một cấu hình đã tắt vẫn quyết
+ * định ngưỡng CPA hiển thị ở trang Chiến dịch. Tắt mà vẫn có tác dụng là bẫy.
  */
 export async function getPauseConfig(
   adAccountId: string,
 ): Promise<{ id: string; status: string; params: AutoPauseConfig } | null> {
   const { rows } = await db.query(
     `SELECT id, status, params FROM automation_config
-     WHERE ad_account_id = $1 AND kind = 'auto_pause'
-     ORDER BY (status = 'active') DESC, updated_at DESC
+     WHERE ad_account_id = $1 AND kind = 'auto_pause' AND status = 'active'
+     ORDER BY updated_at DESC
      LIMIT 1`,
     [adAccountId],
   );

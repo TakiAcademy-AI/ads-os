@@ -38,10 +38,12 @@ export function ConfigBrowser({
   configs,
   accounts,
   campaigns,
+  currentAccountId,
 }: {
   configs: AutomationConfigRow[];
   accounts: { id: string; name: string; platform: string }[];
   campaigns: Record<string, { id: string; name: string; objective: string }[]>;
+  currentAccountId: string | null;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<AutomationKind | 'all'>('all');
@@ -155,6 +157,7 @@ export function ConfigBrowser({
         <NewConfigModal
           accounts={accounts}
           campaigns={campaigns}
+          currentAccountId={currentAccountId}
           onClose={() => setOpen(false)}
           onCreated={() => { setOpen(false); router.refresh(); }}
         />
