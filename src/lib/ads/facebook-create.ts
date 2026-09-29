@@ -98,6 +98,15 @@ export async function createBoostCampaign(token: string, spec: BoostSpec): Promi
     // nhóm. Các chiến lược khác đòi khai giá thầu trần — con số người dùng
     // không nhập ở đây, và đoán sai thì quảng cáo không phân phối được.
     bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
+    // Trường BẮT BUỘC, và là trường khó tìm nhất trong cả chuỗi.
+    //
+    // OUTCOME_ENGAGEMENT không nói lên tương tác Ở ĐÂU. Thiếu destination_type,
+    // Facebook mặc định hiểu là chuyển đổi trên website và từ chối ở bước TẠO
+    // QUẢNG CÁO — ba bước trước vẫn qua ngon lành — với thông báo đòi pixel,
+    // không hề nhắc tới trường còn thiếu.
+    //
+    // ON_PAGE và ON_AD đều bị từ chối với POST_ENGAGEMENT.
+    destination_type: 'ON_POST',
     // CỐ Ý không đặt promoted_object. Nghe thì hợp lý — khai rõ quảng cáo cho
     // Page nào — nhưng với POST_ENGAGEMENT thì Facebook từ chối thẳng:
     // "không thể dùng mục tiêu hiệu quả đã chọn cho mục tiêu chiến dịch".
