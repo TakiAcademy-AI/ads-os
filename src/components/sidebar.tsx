@@ -31,6 +31,7 @@ const GROUPS: { group: string; items: Item[] }[] = [
       { href: '/log', label: 'Nhật ký thay đổi' },
       { href: '/connections', label: 'Kết nối' },
       { href: '/mcp', label: 'MCP Server' },
+      { href: '/huong-dan', label: 'Hướng dẫn' },
     ],
   },
 ];

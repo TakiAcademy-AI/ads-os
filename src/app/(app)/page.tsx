@@ -27,7 +27,10 @@ export default async function DashboardPage() {
               <li><b>Tạo cấu hình tự động hoá</b> — nên để chế độ chạy thử vài tuần
                   trước khi cho bot đụng vào tài khoản.</li>
             </ol>
-            <Link href="/connections" className="btn">Kết nối tài khoản Facebook</Link>
+            <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+              <Link href="/connections" className="btn">Kết nối tài khoản Facebook</Link>
+              <Link href="/huong-dan" className="btn btn-ghost">Đọc hướng dẫn</Link>
+            </div>
           </div>
         </div>
       </>

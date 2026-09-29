@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/session';
 import { db } from '@/lib/db';
 import { dateTime } from '@/lib/format';
 import { KeyManager, type KeyRow } from './key-manager';
+import { McpExamples } from './examples';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,6 +73,8 @@ export default async function McpPage() {
           </div>
         </div>
       </div>
+
+      <McpExamples />
 
       <KeyManager keys={keyRows} mcpUrl={`${origin}/api/mcp`} />
 
