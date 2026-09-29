@@ -25,6 +25,13 @@ function Row({ c }: { c: CampaignRow }) {
           {OBJECTIVE_LABEL[c.objective] ?? c.objective} · {c.status} · {num(c.conversions)} kết quả
           {c.isWhitelisted && <> · <span className="tag tag-mute">được bảo vệ</span></>}
         </div>
+        {c.conversionAction
+          ? <div className="cell-sub mono" style={{ opacity: .75 }}>đếm theo {c.conversionAction}</div>
+          : c.spendMicros > 0 && (
+              <div className="cell-sub" style={{ color: 'var(--amb)' }}>
+                không đo được chuyển đổi
+              </div>
+            )}
       </td>
       <td className="n mono">{vnd(c.spendMicros)}</td>
       <td className={`n mono ${a.overRaw ? 'bad' : ''}`}>{vnd(a.cpaRawMicros)}</td>
@@ -67,6 +74,9 @@ export default async function CampaignsPage() {
     getPauseConfig(accountId),
   ]);
   const saved = campaigns.filter((c) => c.assessment.verdict === 'saved');
+  // Có chi tiêu nhưng hệ thống không biết đếm chuyển đổi kiểu gì → CPA vô nghĩa,
+  // guard không bao giờ đụng tới. Người dùng phải biết mình đang mù chỗ nào.
+  const blind = campaigns.filter((c) => c.spendMicros > 0 && !c.conversionAction);
 
   return (
     <>
@@ -77,6 +87,18 @@ export default async function CampaignsPage() {
         </div>
         <SyncButton accountId={accountId} />
       </div>
+
+      {blind.length > 0 && (
+        <div style={{
+          background: 'var(--amb-soft)', color: 'var(--amb)', fontSize: 12.5,
+          padding: '11px 14px', borderRadius: 'var(--r)', marginBottom: 14, lineHeight: 1.5,
+        }}>
+          <b>{blind.length} chiến dịch có chi tiêu nhưng không đo được chuyển đổi.</b>{' '}
+          Mục tiêu của chúng không khớp loại hành động nào hệ thống biết đếm, nên CPA
+          hiển thị là vô nghĩa và guard sẽ không bao giờ tắt chúng. Kiểm tra lại mục tiêu
+          chiến dịch, hoặc báo để bổ sung loại hành động.
+        </div>
+      )}
 
       {!pauseConfig && (
         <div style={{

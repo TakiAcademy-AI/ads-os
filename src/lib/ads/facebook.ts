@@ -220,38 +220,84 @@ export function spendToMicros(spend: string | undefined, currency: string): numb
   return Math.round(n * (ZERO_DECIMAL.has(currency) ? 1_000_000 : 10_000));
 }
 
-/** Các action_type tính là chuyển đổi, theo mục tiêu chiến dịch. */
+/**
+ * Hành động tính là "chuyển đổi", theo mục tiêu chiến dịch.
+ *
+ * Thứ tự trong mảng là thứ tự ƯU TIÊN: lấy loại đầu tiên tìm thấy, không cộng
+ * dồn nhiều loại. Cộng dồn sẽ đếm trùng — Facebook trả cả `purchase` lẫn
+ * `omni_purchase` cho cùng một đơn hàng.
+ *
+ * CỐ Ý không có phương án dự phòng chung: một chiến dịch mục tiêu mua hàng mà
+ * 0 đơn thì phải ra 0, không được tụt xuống đếm click cho đẹp. Đếm click thay
+ * đơn hàng làm CPA rẻ giả tạo và guard sẽ không bao giờ tắt gì.
+ */
 const CONVERSION_ACTIONS: Record<string, string[]> = {
-  messages: ['onsite_conversion.messaging_conversation_started_7d', 'onsite_conversion.total_messaging_connection'],
+  messages: [
+    'onsite_conversion.messaging_conversation_started_7d',
+    'onsite_conversion.total_messaging_connection',
+  ],
   leads: ['lead', 'onsite_conversion.lead_grouped', 'offsite_conversion.fb_pixel_lead'],
-  sales: ['purchase', 'offsite_conversion.fb_pixel_purchase', 'omni_purchase'],
+  sales: ['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase'],
+  // Mục tiêu traffic không có "chuyển đổi" theo nghĩa bán hàng — thứ gần nhất
+  // là lượt xem trang đích, rồi mới tới lượt nhấp.
+  traffic: ['landing_page_view', 'link_click'],
+  // OUTCOME_ENGAGEMENT gộp nhiều thứ: nhắn tin, tương tác bài, xem video.
+  // Ưu tiên tin nhắn vì ở VN phần lớn chiến dịch loại này là nhắn tin.
+  engagement: [
+    'onsite_conversion.messaging_conversation_started_7d',
+    'onsite_conversion.total_messaging_connection',
+    'post_engagement',
+    'link_click',
+  ],
+  video_views: ['video_view'],
+  // Nhận diện thương hiệu không có chuyển đổi — để trống là đúng, không phải thiếu.
+  awareness: [],
 };
 
-/**
- * Đếm chuyển đổi khớp mục tiêu. Không có mục tiêu khớp thì trả 0 thay vì cộng
- * bừa mọi action — `actions` gồm cả like, comment, xem video, cộng hết vào là
- * CPA rẻ giả tạo và guard sẽ không bao giờ tắt gì.
- */
-export function countConversions(actions: FbAction[] | undefined, objective: string): number {
-  if (!actions?.length) return 0;
-  const wanted = CONVERSION_ACTIONS[objective];
-  if (!wanted) return 0;
-  let n = 0;
-  for (const a of actions) {
-    if (wanted.includes(a.action_type)) n += Number(a.value) || 0;
-  }
-  return n;
+export interface ConversionCount {
+  count: number;
+  /** action_type đã dùng. null = không tìm được hành động nào khớp mục tiêu. */
+  actionType: string | null;
 }
 
-/** Ánh xạ objective của Facebook về enum ad_objective_t. */
+/**
+ * Đếm chuyển đổi khớp mục tiêu chiến dịch.
+ *
+ * Trả về cả loại hành động đã dùng — người dùng phải biết con số CPA đang dựa
+ * trên cái gì, nếu không nó là hộp đen. `actionType === null` nghĩa là hệ
+ * thống KHÔNG ĐO ĐƯỢC chiến dịch này, khác hẳn với "đo được và bằng 0".
+ */
+export function countConversions(
+  actions: FbAction[] | undefined,
+  objective: string,
+): ConversionCount {
+  const wanted = CONVERSION_ACTIONS[objective];
+  if (!wanted?.length || !actions?.length) return { count: 0, actionType: null };
+
+  for (const type of wanted) {
+    const hit = actions.find((a) => a.action_type === type);
+    if (hit) return { count: Number(hit.value) || 0, actionType: type };
+  }
+  return { count: 0, actionType: null };
+}
+
+/**
+ * Ánh xạ objective của Facebook về enum ad_objective_t.
+ *
+ * Facebook đã chuyển sang bộ tên ODAX (OUTCOME_*), nhưng tài khoản cũ vẫn còn
+ * chiến dịch mang tên đời trước (LINK_CLICKS, CONVERSIONS...). Phải nhận cả hai.
+ */
 export function mapObjective(fb: string): string {
   const o = fb.toUpperCase();
   if (o.includes('MESSAG')) return 'messages';
   if (o.includes('LEAD')) return 'leads';
   if (o.includes('SALES') || o.includes('CONVERSION') || o.includes('CATALOG')) return 'sales';
   if (o.includes('TRAFFIC') || o.includes('LINK_CLICK')) return 'traffic';
-  if (o.includes('AWARENESS') || o.includes('REACH') || o.includes('BRAND')) return 'awareness';
+  // Phải xét TRƯỚC 'VIDEO': OUTCOME_ENGAGEMENT gộp cả xem video, mà ta muốn
+  // giữ nó ở nhóm engagement để còn ưu tiên đếm tin nhắn.
+  if (o.includes('ENGAGEMENT') || o.includes('POST_ENGAGEMENT')) return 'engagement';
   if (o.includes('VIDEO')) return 'video_views';
+  if (o.includes('AWARENESS') || o.includes('REACH') || o.includes('BRAND')) return 'awareness';
   return 'unknown';
 }
 

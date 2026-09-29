@@ -94,6 +94,12 @@ export interface CampaignRow {
   clicks: number;
   targetCpaMicros: number;
   assessment: CpaAssessment;
+  /**
+   * Chỉ số dùng để đếm chuyển đổi (vd 'purchase', 'link_click').
+   * null = KHÔNG đo được — khác hẳn với đo được và bằng 0. CPA của chiến dịch
+   * này vô nghĩa, và guard không được phép tắt nó.
+   */
+  conversionAction: string | null;
 }
 
 const DEFAULT_TARGETS: Record<string, number> = {
@@ -127,7 +133,7 @@ export async function listCampaigns(
 
   const { rows: metrics } = await db.query(
     `SELECT campaign_id, to_char(date,'YYYY-MM-DD') date_str,
-            spend_micros, conversions, clicks
+            spend_micros, conversions, clicks, conversion_action
      FROM ad_metric_daily
      WHERE ad_account_id = $1 AND campaign_id IS NOT NULL
        AND date > CURRENT_DATE - $2::int
@@ -136,7 +142,11 @@ export async function listCampaigns(
   );
 
   const byCampaign = new Map<string, MetricRow[]>();
+  const actionByCampaign = new Map<string, string | null>();
   for (const m of metrics) {
+    // Lấy loại hành động của dòng gần nhất có giá trị — đủ để báo cho người
+    // dùng biết con số đang dựa trên cái gì.
+    if (m.conversion_action) actionByCampaign.set(m.campaign_id, m.conversion_action);
     const list = byCampaign.get(m.campaign_id) ?? [];
     list.push({
       date: m.date_str,
@@ -169,6 +179,7 @@ export async function listCampaigns(
       clicks: rows.reduce((s, r) => s + r.clicks, 0),
       targetCpaMicros: target,
       assessment: assessCpa(rows, target, opts),
+      conversionAction: actionByCampaign.get(c.id) ?? null,
     };
   });
 }

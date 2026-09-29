@@ -62,11 +62,12 @@ export async function syncAccount(
     for (const c of campaigns) {
       const { rows } = await db.query(
         `INSERT INTO ad_campaign
-           (ad_account_id, external_id, name, objective, status,
+           (ad_account_id, external_id, name, objective, objective_raw, status,
             daily_budget_micros, lifetime_budget_micros, start_time, updated_at)
-         VALUES ($1,$2,$3,$4::ad_objective_t,$5,$6,$7,$8,NOW())
+         VALUES ($1,$2,$3,$4::ad_objective_t,$9,$5,$6,$7,$8,NOW())
          ON CONFLICT (ad_account_id, external_id) DO UPDATE SET
            name = EXCLUDED.name, objective = EXCLUDED.objective,
+           objective_raw = EXCLUDED.objective_raw,
            status = EXCLUDED.status,
            daily_budget_micros = EXCLUDED.daily_budget_micros,
            lifetime_budget_micros = EXCLUDED.lifetime_budget_micros,
@@ -77,6 +78,7 @@ export async function syncAccount(
           c.daily_budget ? spendToMicros(c.daily_budget, currency) : null,
           c.lifetime_budget ? spendToMicros(c.lifetime_budget, currency) : null,
           c.start_time ?? null,
+          c.objective ?? null,
         ],
       );
       if (rows[0]) idByExternal.set(c.id, rows[0].id);
@@ -105,7 +107,11 @@ export async function syncAccount(
       if (!campaignId) continue; // chiến dịch có số nhưng không còn trong danh sách
 
       const spend = spendToMicros(row.spend, currency);
-      const conversions = countConversions(row.actions, objectiveByExternal.get(extId) ?? 'unknown');
+      // countConversions trả cả loại hành động đã dùng — lưu lại để giao diện
+      // nói được "đang đếm theo cái gì", và để phân biệt "đo được, bằng 0" với
+      // "không đo được". Hai thứ đó khác nhau hoàn toàn khi quyết định tắt ads.
+      const conv = countConversions(row.actions, objectiveByExternal.get(extId) ?? 'unknown');
+      const conversions = conv.count;
       const impressions = Number(row.impressions ?? 0) || 0;
       const reach = Number(row.reach ?? 0) || 0;
       const clicks = Number(row.clicks ?? 0) || 0;
@@ -120,17 +126,19 @@ export async function syncAccount(
       await db.query(
         `INSERT INTO ad_metric_daily
            (ad_account_id, campaign_id, ad_external_id, date,
-            spend_micros, impressions, reach, clicks, conversions, ctr, extra_metrics, updated_at)
-         VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,NOW())
+            spend_micros, impressions, reach, clicks, conversions, ctr, extra_metrics,
+            updated_at, conversion_action)
+         VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,NOW(),$11)
          ON CONFLICT (ad_account_id, campaign_id, date)
            WHERE campaign_id IS NOT NULL AND ad_external_id IS NULL
          DO UPDATE SET
            spend_micros = EXCLUDED.spend_micros, impressions = EXCLUDED.impressions,
            reach = EXCLUDED.reach, clicks = EXCLUDED.clicks,
            conversions = EXCLUDED.conversions, ctr = EXCLUDED.ctr,
-           extra_metrics = EXCLUDED.extra_metrics, updated_at = NOW()`,
+           extra_metrics = EXCLUDED.extra_metrics, updated_at = NOW(),
+           conversion_action = EXCLUDED.conversion_action`,
         [adAccountId, campaignId, row.date_start, spend, impressions, reach, clicks,
-         conversions, ctr, JSON.stringify(extra)],
+         conversions, ctr, JSON.stringify(extra), conv.actionType],
       );
       metricRows++;
 
