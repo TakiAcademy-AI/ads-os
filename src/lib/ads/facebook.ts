@@ -126,6 +126,11 @@ export async function listAdAccounts(token: string): Promise<FbAdAccount[]> {
   );
 }
 
+/** Người dùng Facebook đứng sau token. Cần để xử lý yêu cầu xoá dữ liệu. */
+export async function fbMe(token: string): Promise<{ id: string; name?: string }> {
+  return graph<{ id: string; name?: string }>('/me', { fields: 'id,name' }, token);
+}
+
 // ─── Chiến dịch ──────────────────────────────────────────────────────────────
 
 export interface FbCampaign {

@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { requireUser, getSession } from '@/lib/session';
 import { db } from '@/lib/db';
 import { saveToken } from '@/lib/ads/token';
-import { listAdAccounts } from '@/lib/ads/facebook';
+import { listAdAccounts, fbMe } from '@/lib/ads/facebook';
 import { oauthConfig, exchangeCode, exchangeLongLived, closePopupHtml } from '@/lib/ads/facebook-oauth';
 
 export const runtime = 'nodejs';
@@ -55,6 +55,10 @@ export async function GET(req: Request) {
     // Không đổi sang token dài hạn thì kết nối chết sau một hai giờ.
     const long = await exchangeLongLived(cfg, short.token);
 
+    // Ghi lại ai đã cấp quyền — không có id này thì yêu cầu xoá dữ liệu của
+    // Facebook không biết phải xoá gì (xem /api/facebook/data-deletion).
+    const me = await fbMe(long.token).catch(() => null);
+
     const accounts = await listAdAccounts(long.token);
     if (accounts.length === 0) {
       return html(origin, { ok: false, error: 'Token hợp lệ nhưng không truy cập được tài khoản quảng cáo nào' });
@@ -66,13 +70,14 @@ export async function GET(req: Request) {
     for (const a of accounts) {
       const { rows } = await db.query(
         `INSERT INTO ad_account
-           (owner_id, platform, external_id, name, currency, timezone, status, connected_at)
-         VALUES ($1,'facebook',$2,$3,$4,$5,'pending',NOW())
+           (owner_id, platform, external_id, name, currency, timezone, status, connected_at, fb_user_id)
+         VALUES ($1,'facebook',$2,$3,$4,$5,'pending',NOW(),$6)
          ON CONFLICT (owner_id, platform, external_id) DO UPDATE SET
            name = EXCLUDED.name, currency = EXCLUDED.currency,
-           timezone = EXCLUDED.timezone, last_error = NULL, updated_at = NOW()
+           timezone = EXCLUDED.timezone, fb_user_id = EXCLUDED.fb_user_id,
+           last_error = NULL, updated_at = NOW()
          RETURNING id`,
-        [user.id, a.id, a.name, a.currency, a.timezone_name],
+        [user.id, a.id, a.name, a.currency, a.timezone_name, me?.id ?? null],
       );
       if (rows[0]) { await saveToken(rows[0].id, long.token); saved++; }
     }
