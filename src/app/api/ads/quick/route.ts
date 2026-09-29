@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { readToken } from '@/lib/ads/token';
 import { getTemplate } from '@/lib/queries/templates';
 import {
-  createBoostCampaign, validateBoostCampaign, deleteCampaign, AdCreateError,
+  createBoostCampaign, validateBoostCampaign, cleanupPartial, AdCreateError,
 } from '@/lib/ads/facebook-create';
 
 export const runtime = 'nodejs';
@@ -93,11 +93,10 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, ...made });
   } catch (e) {
-    // Chuỗi hỏng giữa chừng để lại chiến dịch rỗng — dọn đi, đây là thứ mình
-    // vừa tạo vài giây trước chứ không phải của người dùng.
-    if (e instanceof AdCreateError && e.created.campaignId) {
-      await deleteCampaign(token, e.created.campaignId).catch(() => {});
-    }
+    // Chuỗi hỏng giữa chừng để lại rác — dọn đi, đây là thứ mình vừa tạo vài
+    // giây trước chứ không phải của người dùng. Phải dọn cả creative: xoá chiến
+    // dịch KHÔNG kéo theo creative.
+    if (e instanceof AdCreateError) await cleanupPartial(token, e.created);
     const step = e instanceof AdCreateError ? ` (hỏng ở bước ${e.step})` : '';
     return NextResponse.json(
       { error: `${e instanceof Error ? e.message : 'Lỗi không rõ'}${step}` }, { status: 502 },

@@ -16,7 +16,7 @@
 import { db } from '../db';
 import { readToken } from '../ads/token';
 import { readPageToken, fetchRecentPosts } from '../ads/pages';
-import { createBoostCampaign, deleteCampaign, AdCreateError } from '../ads/facebook-create';
+import { createBoostCampaign, cleanupPartial, AdCreateError } from '../ads/facebook-create';
 import { safeParams } from '../configs/schema';
 import { getTemplate } from '../queries/templates';
 
@@ -206,11 +206,10 @@ export async function runPostTrigger(
       const step = e instanceof AdCreateError ? e.step : null;
       const msg = e instanceof Error ? e.message : String(e);
 
-      // Chuỗi hỏng giữa chừng để lại chiến dịch rỗng trong tài khoản. Xoá đi —
-      // đây là thứ mình vừa tạo vài giây trước, không phải của người dùng.
-      if (e instanceof AdCreateError && e.created.campaignId) {
-        await deleteCampaign(token!, e.created.campaignId).catch(() => {});
-      }
+      // Chuỗi hỏng giữa chừng để lại rác trong tài khoản. Xoá đi — đây là thứ
+      // mình vừa tạo vài giây trước, không phải của người dùng. Gồm cả creative:
+      // xoá chiến dịch KHÔNG kéo theo creative.
+      if (e instanceof AdCreateError) await cleanupPartial(token!, e.created);
 
       await db.query(
         `UPDATE ad_mutation SET status='failed', error_message=$2 WHERE id=$1`,

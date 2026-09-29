@@ -162,6 +162,13 @@ export async function createBoostCampaign(token: string, spec: BoostSpec): Promi
       geo_locations: { countries: spec.countries },
       age_min: spec.ageMin,
       age_max: spec.ageMax,
+      // Bắt buộc từ v23: phải khai rõ có cho Facebook tự nới đối tượng không.
+      //
+      // Đặt 0 = giữ đúng đối tượng người dùng khai. Bật lên thì Facebook được
+      // phép phân phối ra ngoài khoảng tuổi và khu vực đã chọn — cùng lý do với
+      // is_adset_budget_sharing_enabled: không để nền tảng tự lệch khỏi con số
+      // người dùng đặt khi đang tiêu tiền của họ.
+      targeting_automation: { advantage_audience: 0 },
     }),
     status: 'PAUSED',
   }, token, 'adset', created);
@@ -200,4 +207,27 @@ export async function deleteCampaign(token: string, campaignId: string): Promise
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
+}
+
+/**
+ * Dọn sạch mọi thứ đã tạo khi chuỗi hỏng giữa chừng.
+ *
+ * Xoá chiến dịch kéo theo nhóm và quảng cáo bên trong, NHƯNG KHÔNG kéo theo
+ * creative — creative là object cấp tài khoản, tồn tại độc lập. Chỉ xoá chiến
+ * dịch là mỗi lần hỏng để lại một creative mồ côi tích tụ dần trong tài khoản.
+ *
+ * Nhận Partial vì lỗi có thể xảy ra ở bất kỳ bước nào.
+ */
+export async function cleanupPartial(
+  token: string,
+  created: Partial<CreatedAd>,
+): Promise<void> {
+  if (created.campaignId) await deleteCampaign(token, created.campaignId).catch(() => {});
+  if (created.creativeId) {
+    await fetch(`${GRAPH}/${VERSION}/${created.creativeId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    }).catch(() => {});
+  }
 }
