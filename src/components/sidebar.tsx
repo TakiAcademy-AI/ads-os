@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import type { AccountOption } from '@/lib/account';
+import { AccountSwitcher } from './account-switcher';
 
 interface Item {
   href: string;
@@ -33,7 +35,13 @@ const GROUPS: { group: string; items: Item[] }[] = [
   },
 ];
 
-export function Sidebar({ userName }: { userName: string }) {
+export function Sidebar({
+  userName, accounts, currentAccountId,
+}: {
+  userName: string;
+  accounts: AccountOption[];
+  currentAccountId: string | null;
+}) {
   const path = usePathname();
   const router = useRouter();
 
@@ -51,6 +59,8 @@ export function Sidebar({ userName }: { userName: string }) {
         <div className="brand-logo">A</div>
         <b>Ads OS</b>
       </div>
+
+      <AccountSwitcher accounts={accounts} currentId={currentAccountId} />
 
       {GROUPS.map(({ group, items }) => (
         <div key={group}>

@@ -14,6 +14,8 @@ export interface SessionData {
    * kẻ tấn công không dựng được state hợp lệ cho phiên của người khác.
    */
   fbOauthState?: string;
+  /** Tài khoản QC đang xem. Xác thực lại quyền sở hữu mỗi lần đọc. */
+  accountId?: string;
 }
 
 const sessionOptions: SessionOptions = {
