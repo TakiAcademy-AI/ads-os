@@ -1,16 +1,33 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireUser } from '@/lib/session';
-import { setConfigStatus, deleteConfig } from '@/lib/queries/configs';
+import { setConfigStatus, setConfigMode, deleteConfig } from '@/lib/queries/configs';
 
-const Patch = z.object({ status: z.enum(['active', 'paused']) });
+// Hai thao tác rời nhau trên cùng một endpoint: đổi trạng thái bật/tắt, hoặc
+// đổi chế độ chạy thử/ghi thật. Cố ý không gộp — đổi sang 'live' là cho phép
+// tiêu tiền, không nên lẫn vào cùng payload với việc bật/tắt.
+const Patch = z.union([
+  z.object({ status: z.enum(['active', 'paused']) }),
+  z.object({ mode: z.enum(['dry_run', 'live']) }),
+]);
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
   const { id } = await ctx.params;
   const parsed = Patch.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Trạng thái không hợp lệ' }, { status: 400 });
+    return NextResponse.json({ error: 'Yêu cầu không hợp lệ' }, { status: 400 });
+  }
+
+  if ('mode' in parsed.data) {
+    const r = await setConfigMode(user.id, id, parsed.data.mode);
+    if (!r) {
+      return NextResponse.json(
+        { error: 'Không tìm thấy cấu hình, hoặc loại này không có chế độ chạy thử' },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json({ ok: true, mode: parsed.data.mode });
   }
 
   try {

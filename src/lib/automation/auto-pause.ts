@@ -10,6 +10,7 @@ import { readToken } from '../ads/token';
 import { setCampaignStatus, readCampaignStatus, FacebookWriteError } from '../ads/facebook-write';
 import { listCampaigns, type CampaignRow } from '../queries/ads';
 import { getPauseConfig } from '../queries/configs';
+import { safeParams } from '../configs/schema';
 
 export interface PauseRunResult {
   evaluated: number;
@@ -29,12 +30,25 @@ const BLOCKED = {
   notMeasurable: 'not_measurable',
 } as const;
 
-export async function runAutoPause(adAccountId: string): Promise<PauseRunResult> {
+/**
+ * @param rawParams params của ĐÚNG cấu hình mà bộ chạy đang xử lý.
+ *
+ * Bắt buộc truyền vào. Bản cũ tự đi hỏi lại database bằng getPauseConfig(), nên
+ * cấu hình mà bộ chạy đang lặp và cấu hình thực sự điều khiển hành vi có thể là
+ * hai bản ghi khác nhau — lúc đó last_error và nhật ký trỏ sai cấu hình, và
+ * interval_minutes của bản ghi này mất hết ý nghĩa.
+ */
+export async function runAutoPause(
+  adAccountId: string,
+  rawParams?: unknown,
+): Promise<PauseRunResult> {
   const out: PauseRunResult = {
     evaluated: 0, proposed: 0, applied: 0, failed: 0, blocked: 0, skipped: 0, notes: [],
   };
 
-  const cfg = await getPauseConfig(adAccountId);
+  const cfg = rawParams === undefined
+    ? await getPauseConfig(adAccountId)
+    : { params: safeParams('auto_pause', rawParams) };
   if (!cfg) {
     out.notes.push('Không có cấu hình tắt ads nào đang bật');
     return out;

@@ -1,3 +1,4 @@
+import { headers } from 'next/headers';
 import { requireUser } from '@/lib/session';
 import { db } from '@/lib/db';
 import { dateTime } from '@/lib/format';
@@ -13,16 +14,29 @@ const STATUS: Record<string, { cls: string; label: string }> = {
 export default async function McpPage() {
   const user = await requireUser();
 
+  // Địa chỉ thật của máy chủ, không kê cứng localhost: người dùng trên
+  // testads.taki.vn chép nguyên lệnh mẫu sẽ không chạy được, và thông báo lỗi
+  // chẳng gợi ý gì về nguyên nhân.
+  const h = await headers();
+  const host = h.get('host') ?? 'localhost:3100';
+  const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
+  const origin = `${proto}://${host}`;
+
   const { rows: keys } = await db.query(
     `SELECT id, name, key_suffix, scopes, status, last_used_at, created_at
      FROM api_key WHERE owner_id = $1 ORDER BY created_at DESC`,
     [user.id],
   );
 
+  // JOIN kèm owner_id, KHÔNG phải LEFT JOIN không điều kiện: bản cũ hiện nhật ký
+  // gọi API của MỌI người dùng trên hệ thống, kèm cả tên key của họ.
   const { rows: logs } = await db.query(
     `SELECT l.tool, l.ok, l.duration_ms, l.created_at, k.name AS key_name
-     FROM mcp_request_log l LEFT JOIN api_key k ON k.id = l.api_key_id
+     FROM mcp_request_log l
+     JOIN api_key k ON k.id = l.api_key_id
+     WHERE k.owner_id = $1
      ORDER BY l.created_at DESC LIMIT 20`,
+    [user.id],
   );
 
   return (
@@ -50,7 +64,7 @@ export default async function McpPage() {
 {`npx tsx scripts/mint-key.ts "Claude Code"
 
 claude mcp add ads-os --transport http \\
-  http://localhost:3100/api/mcp \\
+  ${origin}/api/mcp \\
   --header "Authorization: Bearer <key>"`}
           </pre>
           <div className="note" style={{ marginTop: 10, maxWidth: 'none' }}>
@@ -110,14 +124,14 @@ claude mcp add ads-os --transport http \\
       <div className="card">
         <div className="card-head">
           <b>Tool khả dụng</b>
-          <span>chưa có tool ghi — chưa lệnh nào tác động lên tài khoản QC</span>
+          <span>chưa có công cụ ghi — chưa lệnh nào tác động lên tài khoản quảng cáo</span>
         </div>
         <table>
           <tbody>
             {[
               ['ads_list_campaigns', 'Chiến dịch kèm CPA thô, CPA đã chín và đánh giá'],
               ['ads_get_kpis', 'Chi tiêu, kết quả, CPA, số lần bot tác động / bị chặn'],
-              ['ads_list_mutations', 'Nhật ký thay đổi, gồm cả lần bị guard chặn'],
+              ['ads_list_mutations', 'Nhật ký thay đổi, gồm cả lần bị chốt an toàn chặn'],
               ['ads_attribution_curve', 'Cửa sổ attribution đo được từ lịch sử số liệu'],
             ].map(([name, desc]) => (
               <tr key={name}>

@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 const STATUS: Record<string, { cls: string; label: string }> = {
   applied: { cls: 'tag-ok', label: 'Đã áp dụng' },
-  blocked: { cls: 'tag-keep', label: 'Guard chặn' },
+  blocked: { cls: 'tag-keep', label: 'Chốt an toàn chặn' },
   proposed: { cls: 'tag-mute', label: 'Đề xuất' },
   failed: { cls: 'tag-over', label: 'Lỗi' },
   rolled_back: { cls: 'tag-hold', label: 'Đã hoàn tác' },
@@ -17,13 +17,19 @@ const OP: Record<string, string> = {
   pause: 'Tắt',
   resume: 'Bật lại',
   budget_change: 'Đổi ngân sách',
+  campaign_create: 'Tạo chiến dịch',
 };
 
+// Phải khớp đúng các hằng ở auto-pause.ts. Thiếu một khoá thì người dùng thấy
+// chuỗi snake_case tiếng Anh giữa giao diện tiếng Việt, đúng vào lúc họ cần
+// hiểu vì sao chiến dịch này KHÔNG bị tắt.
 const BLOCKED_BY: Record<string, string> = {
-  attribution_window: 'cửa sổ attribution',
-  whitelist: 'whitelist',
-  blast_radius: 'trần thiệt hại',
-  no_target: 'chưa đặt ngưỡng',
+  attribution_window: 'số chưa chốt, còn trong cửa sổ chờ',
+  protected_campaign: 'chiến dịch được bảo vệ',
+  not_measurable: 'không đo được chuyển đổi',
+  blast_radius: 'trần thiệt hại mỗi lượt',
+  // Tên cũ, giữ lại để dòng nhật ký ghi trước migration 003 vẫn đọc được.
+  whitelist: 'chiến dịch được bảo vệ',
 };
 
 export default async function LogPage() {
@@ -40,7 +46,7 @@ export default async function LogPage() {
         <div>
           <h1>Nhật ký thay đổi</h1>
           <p>
-            Mọi thay đổi bot định làm hoặc đã làm — gồm cả lần chạy thử và lần bị guard chặn
+            Mọi thay đổi bot định làm hoặc đã làm — gồm cả lần chạy thử và lần bị chốt an toàn chặn
           </p>
         </div>
       </div>
@@ -52,7 +58,7 @@ export default async function LogPage() {
           <div className="s">tác động thật lên tài khoản</div>
         </div>
         <div className="kpi accent">
-          <div className="k">Guard chặn lại</div>
+          <div className="k">Chốt an toàn chặn lại</div>
           <div className="v num">{blocked}</div>
           <div className="s">ngăn tắt oan hoặc thiếu dữ liệu</div>
         </div>
@@ -66,7 +72,7 @@ export default async function LogPage() {
       <div className="card">
         <div className="card-head">
           <b>Lịch sử</b>
-          <span>ghi đủ cả lần không áp dụng — nhật ký thiếu thì không ai dám bật auto</span>
+          <span>ghi đủ cả lần không áp dụng — nhật ký thiếu thì không ai dám bật tự động</span>
         </div>
         {rows.length === 0 ? (
           <div className="empty">Chưa có thay đổi nào được ghi lại.</div>

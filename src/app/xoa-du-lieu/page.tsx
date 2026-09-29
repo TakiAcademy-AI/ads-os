@@ -96,8 +96,17 @@ export default async function DataDeletionPage({
       </ul>
       <p style={{ color: 'var(--ink-2)', margin: '-18px 0 28px', lineHeight: 1.6, fontSize: 13.5 }}>
         Chúng tôi <b>không</b> lưu thông tin cá nhân người dùng Facebook, không lưu danh
-        sách khách hàng, không lưu nội dung tin nhắn. Quyền được cấp là{' '}
-        <span className="mono">ads_read</span> — chỉ đọc, không sửa được quảng cáo của bạn.
+        sách khách hàng, không lưu nội dung tin nhắn.
+      </p>
+      <p style={{ color: 'var(--ink-2)', margin: '-18px 0 28px', lineHeight: 1.6, fontSize: 13.5 }}>
+        Quyền được cấp gồm <span className="mono">ads_read</span>,{' '}
+        <span className="mono">ads_management</span>,{' '}
+        <span className="mono">business_management</span>,{' '}
+        <span className="mono">pages_show_list</span> và{' '}
+        <span className="mono">pages_read_engagement</span>. Trong đó{' '}
+        <span className="mono">ads_management</span> cho phép tạm dừng chiến dịch và đổi
+        ngân sách — chỉ được dùng khi bạn tự bật chế độ ghi thật trên từng cấu hình tự
+        động hoá, và mọi thay đổi đều ghi vào nhật ký.
       </p>
 
       <h2 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 10px' }}>Cách yêu cầu xóa</h2>

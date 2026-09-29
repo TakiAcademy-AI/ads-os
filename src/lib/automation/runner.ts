@@ -65,17 +65,19 @@ export async function runDueConfigs(): Promise<CronResult> {
           ? `${r.campaigns} chiến dịch · ${r.metricRows} dòng số liệu · ${r.revisionRows} revision mới`
           : (r.error ?? 'Đồng bộ thất bại');
       } else if (c.kind === 'auto_pause') {
-        const r = await runAutoPause(c.ad_account_id);
+        const r = await runAutoPause(c.ad_account_id, c.params);
         ok = r.failed === 0;
         message = `xét ${r.evaluated} chiến dịch · ${r.applied} ĐÃ TẮT THẬT · `
           + `${r.proposed} đề xuất · ${r.failed} lỗi · ${r.blocked} bị guard chặn · `
           + `${r.skipped} đã ghi trước đó`
           + (r.notes.length ? ` · ${r.notes.join('; ')}` : '');
       } else if (c.kind === 'budget_schedule') {
-        const p = c.params as { mode?: string };
-        const r = await runBudgetSchedule(
-          c.ad_account_id, c.params, p.mode === 'live' ? 'live' : 'dry_run',
-        );
+        // Đọc mode qua safeParams chứ không ép kiểu thô: nếu params hỏng,
+        // safeParams trả về mặc định dry_run, còn ép kiểu thô vẫn cho 'live'
+        // đi qua — tức là ghi thật lên Facebook từ một cấu hình mà chính lớp
+        // kiểm tra đã kết luận là hỏng.
+        const p = safeParams('budget_schedule', c.params);
+        const r = await runBudgetSchedule(c.ad_account_id, c.params, p.mode);
         ok = r.failed === 0;
         message = `xét ${r.evaluated} chiến dịch · ${r.changed} đổi ngân sách · `
           + `${r.failed} lỗi · ${r.unchanged} đã đúng mức · ${r.skipped} đã ghi trước đó`

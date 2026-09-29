@@ -116,6 +116,32 @@ export async function setConfigStatus(
   return (rowCount ?? 0) > 0;
 }
 
+/**
+ * Đổi chế độ chạy thử ⇄ ghi thật.
+ *
+ * mode nằm trong params (JSONB) nên sửa tại chỗ bằng jsonb_set. Chỉ ba loại có
+ * chế độ; metric_sync chỉ đọc số nên không có khái niệm ghi thật.
+ *
+ * Trả về kind để nơi gọi biết loại nào, null nếu không thuộc người gọi hoặc
+ * loại không hỗ trợ.
+ */
+export async function setConfigMode(
+  ownerId: string,
+  configId: string,
+  mode: 'dry_run' | 'live',
+): Promise<{ kind: AutomationKind } | null> {
+  const { rows } = await db.query(
+    `UPDATE automation_config
+     SET params = jsonb_set(COALESCE(params,'{}'::jsonb), '{mode}', to_jsonb($3::text)),
+         updated_at = NOW()
+     WHERE id = $2 AND owner_id = $1
+       AND kind IN ('auto_pause','budget_schedule','post_trigger')
+     RETURNING kind`,
+    [ownerId, configId, mode],
+  );
+  return rows[0] ? { kind: rows[0].kind as AutomationKind } : null;
+}
+
 export async function deleteConfig(ownerId: string, configId: string): Promise<boolean> {
   const { rowCount } = await db.query(
     `DELETE FROM automation_config WHERE id = $2 AND owner_id = $1`,

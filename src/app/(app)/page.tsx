@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { requireUser } from '@/lib/session';
 import { getCurrentAccountId, todayVn } from '@/lib/account';
 import { getKpis, listCampaigns, getAttributionCurve, getTrend } from '@/lib/queries/ads';
@@ -16,8 +17,17 @@ export default async function DashboardPage() {
       <>
         <div className="page-head"><div><h1>Bảng điều khiển</h1></div></div>
         <div className="card">
-          <div className="empty">
-            Chưa kết nối tài khoản quảng cáo nào. Vào Kết nối để thêm tài khoản Facebook Ads.
+          <div className="empty" style={{ textAlign: 'left', maxWidth: 520, margin: '0 auto' }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink)', marginBottom: 14 }}>
+              Ba bước để bắt đầu
+            </div>
+            <ol style={{ paddingLeft: 20, margin: '0 0 18px', lineHeight: 1.9, fontSize: 13.5 }}>
+              <li><b>Kết nối tài khoản Facebook Ads</b> — cần quyền quản trị tài khoản quảng cáo.</li>
+              <li><b>Kéo số liệu về</b> — bấm &ldquo;Đồng bộ ngay&rdquo; ở trang Kết nối.</li>
+              <li><b>Tạo cấu hình tự động hoá</b> — nên để chế độ chạy thử vài tuần
+                  trước khi cho bot đụng vào tài khoản.</li>
+            </ol>
+            <Link href="/connections" className="btn">Kết nối tài khoản Facebook</Link>
           </div>
         </div>
       </>
@@ -57,12 +67,12 @@ export default async function DashboardPage() {
           <div className="s">{num(kpis.conversions)} kết quả</div>
         </div>
         <div className="kpi">
-          <div className="k">Bot đã tác động</div>
+          <div className="k">Bot đã tác động / số lần xét</div>
           <div className="v num">
             {kpis.mutationsApplied}
             <span style={{ fontSize: 15, color: 'var(--dim)' }}> / {kpis.mutationsApplied + kpis.mutationsBlocked}</span>
           </div>
-          <div className="s">{kpis.mutationsBlocked} bị guard chặn lại</div>
+          <div className="s">{kpis.mutationsBlocked} bị chốt an toàn chặn lại</div>
         </div>
         <div className="kpi accent">
           <div className="k">Giữ lại khỏi tắt oan</div>

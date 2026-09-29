@@ -26,7 +26,11 @@ export const KIND_DESC: Record<AutomationKind, string> = {
 export const PLATFORMS = ['facebook', 'tiktok', 'google'] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
-const OBJECTIVE = z.enum(['messages', 'leads', 'sales', 'traffic', 'awareness', 'video_views']);
+// Phải khớp enum ad_objective_t trong database. Thiếu 'engagement' thì đúng
+// loại chiến dịch mà migration 004 sinh ra để cứu lại không đặt được ngưỡng.
+const OBJECTIVE = z.enum([
+  'messages', 'leads', 'sales', 'traffic', 'awareness', 'video_views', 'engagement',
+]);
 
 /** Một ngưỡng CPA cho một loại chiến dịch. */
 export const CpaTargetSchema = z.object({

@@ -100,7 +100,7 @@ export function ConnectPanel({ oauthReady }: { oauthReady: boolean }) {
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head">
         <b>Thêm kết nối</b>
-        <span>chỉ xin quyền đọc số liệu</span>
+        <span>đọc số liệu + tắt/sửa ads (mặc định không dùng)</span>
       </div>
 
       <div style={{ padding: '16px 18px' }}>
@@ -147,8 +147,15 @@ export function ConnectPanel({ oauthReady }: { oauthReady: boolean }) {
                   {busy ? 'Đang chờ cửa sổ Facebook…' : 'Đăng nhập bằng Facebook'}
                 </button>
                 <div className="note" style={{ maxWidth: 'none', marginTop: 10 }}>
-                  Popup sẽ hiện lên để bạn chọn tài khoản và duyệt quyền. Ads OS chỉ xin{' '}
-                  <span className="mono">ads_read</span> — không có quyền sửa hay tắt chiến dịch.
+                  Popup sẽ hiện lên để bạn chọn tài khoản và duyệt quyền. Ads OS xin{' '}
+                  <span className="mono">ads_read</span>, <span className="mono">ads_management</span>,{' '}
+                  <span className="mono">business_management</span>,{' '}
+                  <span className="mono">pages_show_list</span>,{' '}
+                  <span className="mono">pages_read_engagement</span> — tức là có quyền
+                  tắt chiến dịch và đổi ngân sách. <b>Nhưng mặc định mọi cấu hình chạy ở
+                  chế độ thử và không đụng vào tài khoản của bạn</b>; chỉ khi bạn tự tay
+                  bật &ldquo;ghi thật&rdquo; trên từng cấu hình thì bot mới được hành động, và vẫn
+                  bị chặn bởi trần thiệt hại cùng danh sách chiến dịch được bảo vệ.
                   Token nhận về có hạn 60 ngày, hết hạn thì nối lại.
                 </div>
               </>

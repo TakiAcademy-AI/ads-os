@@ -38,8 +38,8 @@ export default async function ConfigsPage() {
     <>
       <div className="page-head">
         <div>
-          <h1>Quản lý cấu hình</h1>
-          <p>Kéo chỉ số, tắt ads, ngân sách, tự động chạy — mỗi luồng một bản ghi riêng</p>
+          <h1>Cấu hình</h1>
+          <p>Kéo chỉ số, tắt ads, ngân sách, tự động chạy — mỗi việc một cấu hình riêng</p>
         </div>
       </div>
 

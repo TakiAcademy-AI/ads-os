@@ -102,9 +102,17 @@ export interface CampaignRow {
   conversionAction: string | null;
 }
 
+/**
+ * Ngưỡng dùng khi tài khoản chưa có cấu hình tắt ads nào đang bật.
+ *
+ * PHẢI khớp OBJECTIVES trong new-config-modal.tsx — lệch nhau thì modal đề nghị
+ * một con số còn trang Chiến dịch chấm điểm theo con số khác. Loại không có ở
+ * đây nhận ngưỡng 0, không bao giờ bị đánh giá vượt, tức là rơi vào vùng mù.
+ */
 const DEFAULT_TARGETS: Record<string, number> = {
   messages: 120_000_000_000,
   leads: 80_000_000_000,
+  sales: 250_000_000_000,
 };
 
 /**

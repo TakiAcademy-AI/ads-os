@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { requireUser } from '@/lib/session';
 import { getCurrentAccountId, todayVn } from '@/lib/account';
 import { listCampaigns, type CampaignRow } from '@/lib/queries/ads';
@@ -6,6 +7,14 @@ import { vnd, num, OBJECTIVE_LABEL } from '@/lib/format';
 import { SyncButton } from '../connections/sync-button';
 
 export const dynamic = 'force-dynamic';
+
+/** Facebook trả trạng thái bằng tiếng Anh viết hoa. */
+const CAMPAIGN_STATUS: Record<string, string> = {
+  ACTIVE: 'đang chạy',
+  PAUSED: 'đã tắt',
+  ARCHIVED: 'đã lưu trữ',
+  DELETED: 'đã xoá',
+};
 
 const VERDICT: Record<string, { cls: string; label: string }> = {
   ok: { cls: 'tag-ok', label: 'Trong ngưỡng' },
@@ -22,7 +31,7 @@ function Row({ c }: { c: CampaignRow }) {
       <td>
         <div className="cell-title">{c.name}</div>
         <div className="cell-sub">
-          {OBJECTIVE_LABEL[c.objective] ?? c.objective} · {c.status} · {num(c.conversions)} kết quả
+          {OBJECTIVE_LABEL[c.objective] ?? c.objective} · {CAMPAIGN_STATUS[c.status.toUpperCase()] ?? c.status} · {num(c.conversions)} kết quả
           {c.isWhitelisted && <> · <span className="tag tag-mute">được bảo vệ</span></>}
         </div>
         {c.conversionAction
@@ -64,7 +73,14 @@ export default async function CampaignsPage() {
     return (
       <>
         <div className="page-head"><div><h1>Chiến dịch</h1></div></div>
-        <div className="card"><div className="empty">Chưa kết nối tài khoản quảng cáo nào.</div></div>
+        <div className="card">
+          <div className="empty">
+            <div style={{ marginBottom: 12 }}>
+              Chưa kết nối tài khoản quảng cáo nào — chưa có chiến dịch để hiển thị.
+            </div>
+            <Link href="/connections" className="btn">Kết nối tài khoản Facebook</Link>
+          </div>
+        </div>
       </>
     );
   }
@@ -106,7 +122,7 @@ export default async function CampaignsPage() {
           padding: '11px 14px', borderRadius: 'var(--r)', marginBottom: 14, lineHeight: 1.5,
         }}>
           Tài khoản này chưa có cấu hình <b>Tắt ads tự động</b> nào đang bật, nên bảng dưới
-          dùng ngưỡng mặc định (tin nhắn 120.000đ · lead 80.000đ). Vào Cấu hình để đặt
+          dùng ngưỡng mặc định (tin nhắn 120.000đ · lead 80.000đ · mua hàng 250.000đ). Vào Cấu hình để đặt
           ngưỡng riêng — cấu hình ở trạng thái nháp hoặc tạm dừng sẽ không có tác dụng.
         </div>
       )}

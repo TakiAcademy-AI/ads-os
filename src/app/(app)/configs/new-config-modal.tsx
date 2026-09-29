@@ -179,7 +179,10 @@ export function NewConfigModal({
   return (
     <div
       onClick={onClose}
-      style={{ position: 'absolute', inset: 0, background: 'rgba(20,20,40,.32)',
+      // fixed chứ không absolute: absolute neo theo khối cha đã cuộn, nên nếu
+      // người dùng cuộn xuống rồi bấm "Thêm cấu hình" thì modal hiện tít trên
+      // đầu trang, ngoài tầm nhìn — màn hình tối đi mà không thấy hộp thoại đâu.
+      style={{ position: 'fixed', inset: 0, background: 'rgba(20,20,40,.32)',
                display: 'grid', placeItems: 'center', padding: 20, zIndex: 50 }}
     >
       <div
