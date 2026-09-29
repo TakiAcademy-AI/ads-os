@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import { requireUser } from '@/lib/session';
 import { db } from '@/lib/db';
 import { dateTime } from '@/lib/format';
+import { KeyManager, type KeyRow } from './key-manager';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,6 +40,16 @@ export default async function McpPage() {
     [user.id],
   );
 
+  const keyRows: KeyRow[] = keys.map((k) => ({
+    id: k.id,
+    name: k.name,
+    keySuffix: k.key_suffix,
+    scopes: k.scopes as string[],
+    status: k.status,
+    lastUsedAt: k.last_used_at ? new Date(k.last_used_at).toISOString() : null,
+    createdAt: new Date(k.created_at).toISOString(),
+  }));
+
   return (
     <>
       <div className="page-head">
@@ -51,75 +62,18 @@ export default async function McpPage() {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-head">
           <b>Kết nối</b>
-          <span>4 tool, tất cả chỉ đọc</span>
+          <span>4 công cụ, tất cả chỉ đọc</span>
         </div>
         <div style={{ padding: '16px 18px' }}>
-          <div style={{ fontSize: 13, color: 'var(--ink-2)', marginBottom: 10 }}>
-            Tạo key bằng lệnh dưới, rồi gắn vào Claude Code:
-          </div>
-          <pre className="mono" style={{
-            background: '#f5f5fa', border: '1px solid var(--line)', borderRadius: 'var(--r-sm)',
-            padding: '12px 14px', fontSize: 12.5, overflowX: 'auto', margin: 0, lineHeight: 1.7,
-          }}>
-{`npx tsx scripts/mint-key.ts "Claude Code"
-
-claude mcp add ads-os --transport http \\
-  ${origin}/api/mcp \\
-  --header "Authorization: Bearer <key>"`}
-          </pre>
-          <div className="note" style={{ marginTop: 10, maxWidth: 'none' }}>
-            Key chỉ hiện một lần lúc tạo — hệ thống chỉ lưu SHA-256. Mất thì thu hồi và tạo key mới.
+          <div style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+            Tạo key ở dưới rồi chép lệnh vào terminal. Sau đó hỏi Claude bằng
+            tiếng Việt — &ldquo;chiến dịch nào đang vượt ngưỡng CPA&rdquo;,
+            &ldquo;bot đã chặn những gì tuần này&rdquo; — nó sẽ tự gọi Ads OS.
           </div>
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-head">
-          <b>API key</b>
-          <span>{keys.length} key</span>
-        </div>
-        {keys.length === 0 ? (
-          <div className="empty">Chưa có key nào.</div>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Tên</th>
-                <th>Key</th>
-                <th>Quyền</th>
-                <th>Dùng lần cuối</th>
-                <th>Trạng thái</th>
-              </tr>
-            </thead>
-            <tbody>
-              {keys.map((k) => {
-                const st = STATUS[k.status] ?? STATUS.active!;
-                return (
-                  <tr key={k.id}>
-                    <td>
-                      <div className="cell-title">{k.name}</div>
-                      <div className="cell-sub">tạo {dateTime(new Date(k.created_at).toISOString())}</div>
-                    </td>
-                    <td className="mono" style={{ color: 'var(--dim)' }}>adsos_…{k.key_suffix}</td>
-                    <td>
-                      {(k.scopes as string[]).map((s) => (
-                        <span key={s} className={`tag ${s === 'write' ? 'tag-over' : 'tag-mute'}`}
-                              style={{ marginRight: 4 }}>
-                          {s === 'write' ? 'ghi' : 'đọc'}
-                        </span>
-                      ))}
-                    </td>
-                    <td style={{ color: 'var(--dim)' }}>
-                      {k.last_used_at ? dateTime(new Date(k.last_used_at).toISOString()) : 'chưa dùng'}
-                    </td>
-                    <td><span className={`tag ${st.cls}`}>{st.label}</span></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <KeyManager keys={keyRows} mcpUrl={`${origin}/api/mcp`} />
 
       <div className="card">
         <div className="card-head">

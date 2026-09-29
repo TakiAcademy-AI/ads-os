@@ -78,23 +78,62 @@ export const MetricSyncParams = z.object({
   extraFields: z.array(z.string()).default([]),
 });
 
+export interface BudgetSlot {
+  startHour: number;
+  endHour: number;
+  percent: number;
+}
+
+/**
+ * Các giờ trong ngày mà một khung phủ, dạng 0–23.
+ *
+ * Khung vắt qua nửa đêm (22h→6h) là chuyện rất thường — giảm ngân sách ban
+ * đêm. Với khung đó endHour <= startHour, nên không so sánh trực tiếp được;
+ * phải trải ra thành tập giờ rồi mới đối chiếu.
+ */
+export function slotHours(s: BudgetSlot): number[] {
+  const out: number[] = [];
+  const end = s.endHour === 0 ? 24 : s.endHour;
+  if (end > s.startHour) {
+    for (let h = s.startHour; h < end; h++) out.push(h);
+  } else {
+    for (let h = s.startHour; h < 24; h++) out.push(h);
+    for (let h = 0; h < end; h++) out.push(h);
+  }
+  return out;
+}
+
 export const BudgetScheduleParams = z.object({
   platform: z.enum(PLATFORMS).default('facebook'),
   mode: z.enum(['dry_run', 'live']).default('dry_run'),
   slots: z.array(z.object({
     startHour: z.number().int().min(0).max(23),
-    endHour: z.number().int().min(1).max(24),
+    endHour: z.number().int().min(0).max(24),
     /** Phần trăm so với NGÂN SÁCH GỐC, không phải giá trị hiện tại. */
     percent: z.number().int().min(10).max(500),
   }))
     .default([])
     // Khung giờ chồng nhau thì kết quả phụ thuộc thứ tự mảng — người dùng đặt
     // 19-22h 150% và 20-23h 80% sẽ không đoán được cái nào thắng.
+    //
+    // Kiểm bằng cách trải ra từng giờ thay vì so sánh mốc đầu/cuối: cách cũ
+    // đòi endHour > startHour nên loại thẳng khung qua nửa đêm, mà giao diện
+    // lại không hề nói là không hỗ trợ.
     .refine((slots) => {
-      const sorted = [...slots].sort((a, b) => a.startHour - b.startHour);
-      return sorted.every((s, i) =>
-        s.endHour > s.startHour && (i === 0 || s.startHour >= sorted[i - 1]!.endHour));
-    }, 'Khung giờ không được chồng lên nhau, và giờ kết thúc phải sau giờ bắt đầu'),
+      const seen = new Set<number>();
+      for (const s of slots) {
+        // 5h→5h nhập nhằng: có thể hiểu là không giờ nào, cũng có thể là cả
+        // ngày. Cả ngày đã có cách viết rõ ràng là 0h→24h, nên chặn thẳng thay
+        // vì đoán hộ người dùng một cấu hình điều khiển tiền.
+        const end = s.endHour === 0 ? 24 : s.endHour;
+        if (end === s.startHour) return false;
+        for (const h of slotHours(s)) {
+          if (seen.has(h)) return false;
+          seen.add(h);
+        }
+      }
+      return true;
+    }, 'Khung giờ không được chồng lên nhau, và giờ bắt đầu phải khác giờ kết thúc'),
 });
 
 export const PostTriggerParams = z.object({

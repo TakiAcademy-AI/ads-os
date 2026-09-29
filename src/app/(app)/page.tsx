@@ -89,7 +89,7 @@ export default async function DashboardPage() {
         <TrendChart data={trend} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.35fr 1fr', gap: 16 }}>
+      <div className="split" style={{ display: 'grid', gridTemplateColumns: '1.35fr 1fr', gap: 16 }}>
         <div className="card">
           <div className="card-head">
             <b>Trạng thái chiến dịch</b>

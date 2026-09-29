@@ -117,6 +117,40 @@ export async function setConfigStatus(
 }
 
 /**
+ * Sửa cấu hình đã tạo.
+ *
+ * KHÔNG cho đổi `kind` và `ad_account_id`: đổi loại thì params cũ vô nghĩa,
+ * đổi tài khoản thì nhật ký và các bản ghi đã gắn với cấu hình này trỏ sai chỗ.
+ * Muốn đổi hai thứ đó thì tạo cấu hình mới.
+ */
+export async function updateConfig(
+  ownerId: string,
+  configId: string,
+  input: { name: string; intervalMinutes: number; params: unknown },
+): Promise<{ kind: AutomationKind } | null> {
+  const { rows } = await db.query(
+    `UPDATE automation_config
+     SET name = $3, interval_minutes = $4, params = $5::jsonb, updated_at = NOW()
+     WHERE id = $2 AND owner_id = $1
+     RETURNING kind`,
+    [ownerId, configId, input.name, input.intervalMinutes, JSON.stringify(input.params)],
+  );
+  return rows[0] ? { kind: rows[0].kind as AutomationKind } : null;
+}
+
+/** Một cấu hình cụ thể, để dựng form sửa. */
+export async function getConfig(
+  ownerId: string,
+  configId: string,
+): Promise<{ kind: AutomationKind; params: unknown } | null> {
+  const { rows } = await db.query(
+    'SELECT kind, params FROM automation_config WHERE id = $2 AND owner_id = $1',
+    [ownerId, configId],
+  );
+  return rows[0] ? { kind: rows[0].kind, params: rows[0].params } : null;
+}
+
+/**
  * Đổi chế độ chạy thử ⇄ ghi thật.
  *
  * mode nằm trong params (JSONB) nên sửa tại chỗ bằng jsonb_set. Chỉ ba loại có

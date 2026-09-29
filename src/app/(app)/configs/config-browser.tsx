@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { KINDS, KIND_LABEL, type AutomationKind } from '@/lib/configs/schema';
 import type { AutomationConfigRow } from '@/lib/queries/configs';
-import { NewConfigModal } from './new-config-modal';
+import { NewConfigModal, type EditingConfig } from './new-config-modal';
 
 const STATUS: Record<string, { cls: string; label: string }> = {
   active: { cls: 'tag-ok', label: 'Đang chạy' },
@@ -103,6 +103,7 @@ export function ConfigBrowser({
   const [filter, setFilter] = useState<AutomationKind | 'all'>('all');
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<EditingConfig | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
 
@@ -285,6 +286,18 @@ export function ConfigBrowser({
                         )}
                         <button
                           className="btn btn-ghost"
+                          style={{ fontSize: 12, padding: '5px 11px' }}
+                          disabled={busy === c.id}
+                          onClick={() => setEditing({
+                            id: c.id, kind: c.kind, name: c.name,
+                            adAccountId: c.adAccountId,
+                            intervalMinutes: c.intervalMinutes, params: c.params,
+                          })}
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          className="btn btn-ghost"
                           style={{ fontSize: 12, padding: '5px 11px', color: 'var(--red)' }}
                           disabled={busy === c.id}
                           onClick={() => remove(c)}
@@ -308,6 +321,20 @@ export function ConfigBrowser({
           currentAccountId={currentAccountId}
           onClose={() => setOpen(false)}
           onCreated={() => { setOpen(false); router.refresh(); }}
+        />
+      )}
+
+      {editing && (
+        // key ép React dựng lại từ đầu khi đổi sang cấu hình khác — không có nó
+        // thì state cũ còn nguyên và form hiện số của cấu hình vừa đóng.
+        <NewConfigModal
+          key={editing.id}
+          accounts={accounts}
+          campaigns={campaigns}
+          currentAccountId={currentAccountId}
+          editing={editing}
+          onClose={() => setEditing(null)}
+          onCreated={() => { setEditing(null); router.refresh(); }}
         />
       )}
     </>

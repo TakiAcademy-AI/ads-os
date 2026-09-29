@@ -7,7 +7,7 @@
 import { db } from '../db';
 import { readToken } from '../ads/token';
 import { setCampaignDailyBudget, readCampaignBudget, FacebookWriteError } from '../ads/facebook-write';
-import { safeParams } from '../configs/schema';
+import { safeParams, slotHours } from '../configs/schema';
 
 export interface BudgetRunResult {
   evaluated: number;
@@ -54,8 +54,17 @@ export async function runBudgetSchedule(
   // Khung giờ khớp giờ hiện tại. Không khớp khung nào = về 100% ngân sách gốc,
   // chứ không phải giữ nguyên giá trị của khung trước — nếu giữ nguyên thì hết
   // giờ vàng ngân sách vẫn cao suốt đêm.
-  const slot = params.slots.find((s) => hour >= s.startHour && hour < s.endHour);
+  // Đối chiếu bằng tập giờ chứ không so mốc đầu/cuối — khung 22h→6h có
+  // endHour nhỏ hơn startHour nên phép so sánh trực tiếp không bao giờ khớp.
+  const slot = params.slots.find((s) => slotHours(s).includes(hour));
   const percent = slot?.percent ?? 100;
+
+  // Tiền tệ của tài khoản quyết định hệ số quy đổi khi ghi lên Facebook.
+  // Thiếu nó thì tài khoản USD bị đặt sai 100 lần.
+  const { rows: acct } = await db.query(
+    'SELECT currency FROM ad_account WHERE id = $1', [adAccountId],
+  );
+  const currency = (acct[0]?.currency as string | undefined) ?? 'VND';
 
   const { rows: camps } = await db.query(
     `SELECT id, external_id, name, daily_budget_micros, base_daily_budget_micros
@@ -97,8 +106,8 @@ export async function runBudgetSchedule(
     const key = `${c.external_id}:budget:${today}T${String(hour).padStart(2, '0')}`;
     const reason = slot
       ? `Khung ${slot.startHour}h-${slot.endHour}h đặt ${percent}% ngân sách gốc `
-        + `(${fmt(base)} → ${fmt(target)})`
-      : `Ngoài mọi khung giờ — trả về 100% ngân sách gốc (${fmt(base)})`;
+        + `(${fmt(base, currency)} → ${fmt(target, currency)})`
+      : `Ngoài mọi khung giờ — trả về 100% ngân sách gốc (${fmt(base, currency)})`;
 
     const { rows: mut } = await db.query(
       `INSERT INTO ad_mutation
@@ -108,7 +117,7 @@ export async function runBudgetSchedule(
                $6,$7,$8,$9)
        ON CONFLICT (ad_account_id, idempotency_key) DO NOTHING
        RETURNING id`,
-      [adAccountId, c.id, c.external_id, c.name, mode, fmt(current), fmt(target), reason, key],
+      [adAccountId, c.id, c.external_id, c.name, mode, fmt(current, currency), fmt(target, currency), reason, key],
     );
     const mutationId = mut[0]?.id as string | undefined;
     if (!mutationId) { out.skipped++; continue; }
@@ -116,14 +125,14 @@ export async function runBudgetSchedule(
     if (mode === 'dry_run') { out.changed++; continue; }
 
     try {
-      await setCampaignDailyBudget(token!, c.external_id, target);
+      await setCampaignDailyBudget(token!, c.external_id, target, currency);
 
       // Đọc lại để xác nhận — Facebook làm tròn ngân sách theo đơn vị tiền tệ
       // nên giá trị trả về có thể lệch vài đồng so với target.
-      const after = await readCampaignBudget(token!, c.external_id);
+      const after = await readCampaignBudget(token!, c.external_id, currency);
       await db.query(
         `UPDATE ad_mutation SET status='applied', applied_at=NOW(), after_value=$2 WHERE id=$1`,
-        [mutationId, after === null ? fmt(target) : fmt(after)],
+        [mutationId, after === null ? fmt(target, currency) : fmt(after, currency)],
       );
       await db.query(
         `UPDATE ad_campaign SET daily_budget_micros = $2, updated_at = NOW() WHERE id = $1`,
@@ -145,6 +154,11 @@ export async function runBudgetSchedule(
   return out;
 }
 
-function fmt(micros: number): string {
-  return `${Math.round(micros / 1_000_000).toLocaleString('vi-VN')}đ/ngày`;
+/** Hiển thị cho nhật ký. Chỉ VND mới đọc được bằng đồng nguyên. */
+function fmt(micros: number, currency = 'VND'): string {
+  if (currency.toUpperCase() === 'VND') {
+    return `${Math.round(micros / 1_000_000).toLocaleString('vi-VN')}đ/ngày`;
+  }
+  return `${(micros / 1_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 2 })} `
+    + `${currency}/ngày`;
 }

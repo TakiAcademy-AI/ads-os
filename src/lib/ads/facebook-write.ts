@@ -6,6 +6,8 @@
 // Ở đây KHÔNG có logic quyết định. Quyết định nằm ở lib/automation/auto-pause.ts
 // với đầy đủ guard. File này chỉ thực thi một lệnh đã được duyệt.
 
+import { microsToMinor, minorToMicros } from './currency';
+
 const GRAPH = 'https://graph.facebook.com';
 const VERSION = process.env.FB_API_VERSION || 'v23.0';
 const TIMEOUT_MS = 20_000;
@@ -70,16 +72,17 @@ export async function setCampaignStatus(
 /**
  * Đổi ngân sách/ngày của chiến dịch (CBO).
  *
- * Facebook nhận đơn vị nhỏ nhất của tiền tệ, KHÔNG phải micros — VND thì là
- * đồng, USD thì là cents. Cùng cái bẫy với spendToMicros, chỉ ngược chiều.
+ * Facebook nhận đơn vị nhỏ nhất của tiền tệ, KHÔNG phải micros — VND là đồng,
+ * USD là cents. Vì vậy PHẢI truyền currency: chia cứng 1.000.000 sẽ đặt $0,15
+ * thay cho $15 trên tài khoản USD, và nhật ký vẫn báo thành công.
  */
 export async function setCampaignDailyBudget(
   token: string,
   campaignExternalId: string,
   budgetMicros: number,
+  currency: string,
 ): Promise<void> {
-  // micros → đồng. VND không có đơn vị phụ nên chia đúng 1.000.000.
-  const value = Math.round(budgetMicros / 1_000_000);
+  const value = microsToMinor(budgetMicros, currency);
   if (value <= 0) {
     throw new FacebookWriteError('Ngân sách phải lớn hơn 0');
   }
@@ -90,6 +93,7 @@ export async function setCampaignDailyBudget(
 export async function readCampaignBudget(
   token: string,
   campaignExternalId: string,
+  currency: string,
 ): Promise<number | null> {
   const res = await fetch(
     `${GRAPH}/${VERSION}/${campaignExternalId}?fields=daily_budget`,
@@ -98,7 +102,7 @@ export async function readCampaignBudget(
   if (!res.ok) return null;
   const json = (await res.json().catch(() => ({}))) as { daily_budget?: string };
   if (!json.daily_budget) return null;
-  return Math.round(Number(json.daily_budget) * 1_000_000);
+  return minorToMicros(json.daily_budget, currency);
 }
 
 /** Đọc lại trạng thái để xác nhận lệnh đã ăn — không tin response, tin dữ liệu. */

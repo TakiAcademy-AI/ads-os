@@ -3,6 +3,8 @@
 // Không có hàm nào ghi lên tài khoản quảng cáo. Khi thêm lớp ghi, nó phải nằm
 // ở file riêng và đi qua guard attribution + ghi ad_mutation.
 
+import { minorToMicros } from './currency';
+
 const GRAPH = 'https://graph.facebook.com';
 const VERSION = process.env.FB_API_VERSION || 'v23.0';
 const TIMEOUT_MS = 25_000;
@@ -218,11 +220,9 @@ export async function fetchInsights(
  * ("50000" = 50.000đ). Dùng chung một hệ số là sai 100 lần.
  */
 export function spendToMicros(spend: string | undefined, currency: string): number {
-  if (!spend) return 0;
-  const n = parseFloat(spend);
-  if (!Number.isFinite(n)) return 0;
-  const ZERO_DECIMAL = new Set(['VND', 'JPY', 'KRW', 'CLP', 'ISK']);
-  return Math.round(n * (ZERO_DECIMAL.has(currency) ? 1_000_000 : 10_000));
+  // Hệ số nằm ở lib/ads/currency.ts — một nguồn duy nhất cho cả chiều đọc lẫn
+  // chiều ghi. Trước đây mỗi chỗ tự định nghĩa và chúng lệch nhau.
+  return minorToMicros(spend, currency);
 }
 
 /**

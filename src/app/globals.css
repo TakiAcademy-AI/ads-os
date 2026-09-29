@@ -151,3 +151,65 @@ tbody tr:hover { background: #fafaff; }
 }
 .field input:focus { outline: none; border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); }
 .err { font-size: 12.5px; color: var(--red); margin-bottom: 12px; }
+
+/* ── Màn hình hẹp ─────────────────────────────────────────────────────────────
+   Người chạy quảng cáo ở Việt Nam xem số trên điện thoại rất nhiều. Trước đây
+   toàn bộ file không có một @media nào: sidebar 236px chiếm gần nửa màn hình
+   và mọi bảng 6-7 cột tràn ngang. */
+
+@media (max-width: 1100px) {
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 860px) {
+  /* Sidebar xuống thành thanh ngang cuộn được, nhường hết bề ngang cho nội dung.
+     Cấu trúc thật là <aside class="side"> chứa .brand, các khối .nav-group +
+     .nav-item, rồi .side-foot — không có thẻ <nav> nào để nhắm. */
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .side {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 9px 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .side > * { flex: none; }
+  .side > div:has(.nav-item) { display: flex; gap: 4px; align-items: center; }
+
+  .brand { padding: 0 8px 0 0; }
+  /* Nhãn nhóm không hoạt động khi xếp ngang. */
+  .nav-group { display: none; }
+  .nav-item { white-space: nowrap; padding: 7px 11px; }
+  .nav-item.soon { display: none; }
+
+  .side-foot {
+    margin-top: 0; margin-left: auto;
+    padding: 0 0 0 10px;
+    border-top: 0; border-left: 1px solid var(--line);
+  }
+  .side-foot span { max-width: 90px; }
+
+  .main { padding: 16px 14px; }
+
+  .page-head { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .page-head h1 { font-size: 20px; }
+
+  /* Bảng nhiều cột: cho cuộn ngang trong khung riêng thay vì phá vỡ bố cục. */
+  .card { overflow-x: auto; }
+  table { min-width: 620px; }
+
+  /* Lưới hai cột ở Bảng điều khiển xếp chồng lại. */
+  .split { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 560px) {
+  .kpis { grid-template-columns: 1fr; }
+  .card-head { flex-wrap: wrap; gap: 8px; }
+  .main { padding: 14px 11px; }
+}

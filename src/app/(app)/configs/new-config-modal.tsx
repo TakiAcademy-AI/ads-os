@@ -42,54 +42,81 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   );
 }
 
+/** Cấu hình đang sửa. Bỏ trống = đang tạo mới. */
+export interface EditingConfig {
+  id: string;
+  kind: AutomationKind;
+  name: string;
+  adAccountId: string;
+  intervalMinutes: number;
+  params: unknown;
+}
+
 export function NewConfigModal({
-  accounts, campaigns, currentAccountId, onClose, onCreated,
+  accounts, campaigns, currentAccountId, editing, onClose, onCreated,
 }: {
   accounts: Account[];
   campaigns: Record<string, Campaign[]>;
   /** Tài khoản đang xem ở sidebar — mặc định tạo cấu hình cho chính nó. */
   currentAccountId: string | null;
+  editing?: EditingConfig;
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const [kind, setKind] = useState<AutomationKind>('metric_sync');
-  const [platform, setPlatform] = useState<Platform>('facebook');
-  const [name, setName] = useState('');
-  const [accountId, setAccountId] = useState(currentAccountId ?? accounts[0]?.id ?? '');
-  const [interval, setIntervalMin] = useState(30);
+  // Đọc params của cấu hình đang sửa. Dùng khoá có sẵn, thiếu thì lấy mặc định
+  // giống hệt lúc tạo mới — cấu hình cũ có thể thiếu trường mới thêm về sau.
+  const ep = (editing?.params ?? {}) as Record<string, any>;
+  const pick = <T,>(v: T | undefined, fallback: T): T => (v === undefined || v === null ? fallback : v);
+
+  const [kind, setKind] = useState<AutomationKind>(editing?.kind ?? 'metric_sync');
+  const [platform, setPlatform] = useState<Platform>(pick(ep.platform, 'facebook'));
+  const [name, setName] = useState(editing?.name ?? '');
+  const [accountId, setAccountId] = useState(
+    editing?.adAccountId ?? currentAccountId ?? accounts[0]?.id ?? '');
+  const [interval, setIntervalMin] = useState(editing?.intervalMinutes ?? 30);
 
   // metric_sync
-  const [lookbackDays, setLookbackDays] = useState(30);
-  const [level, setLevel] = useState<'campaign' | 'adset' | 'ad'>('campaign');
-  const [extraFields, setExtraFields] = useState<string[]>([]);
+  const [lookbackDays, setLookbackDays] = useState<number>(pick(ep.lookbackDays, 30));
+  const [level, setLevel] = useState<'campaign' | 'adset' | 'ad'>(pick(ep.level, 'campaign'));
+  const [extraFields, setExtraFields] = useState<string[]>(pick(ep.extraFields, []));
 
-  // auto_pause
-  const [enabled, setEnabled] = useState<Record<string, boolean>>({ messages: true, leads: true, sales: false });
-  const [cpa, setCpa] = useState<Record<string, number>>({ messages: 120_000, leads: 80_000, sales: 250_000 });
-  const [attributionDays, setAttributionDays] = useState(7);
-  const [minConversions, setMinConversions] = useState(10);
-  const [minClicks, setMinClicks] = useState(100);
-  const [protectedIds, setProtectedIds] = useState<string[]>([]);
-  const [maxPauses, setMaxPauses] = useState(3);
-  const [liveMode, setLiveMode] = useState(false);
+  // auto_pause — dựng lại bảng bật/tắt và ngưỡng từ mảng targets
+  const targets: { objective: string; targetCpaMicros: number }[] =
+    Array.isArray(ep.targets) ? ep.targets : [];
+  const [enabled, setEnabled] = useState<Record<string, boolean>>(
+    editing
+      ? Object.fromEntries(OBJECTIVES.map((o) => [o.value, targets.some((t) => t.objective === o.value)]))
+      : { messages: true, leads: true, sales: false });
+  const [cpa, setCpa] = useState<Record<string, number>>(
+    Object.fromEntries(OBJECTIVES.map((o) => {
+      const hit = targets.find((t) => t.objective === o.value);
+      return [o.value, hit ? Math.round(hit.targetCpaMicros / 1_000_000) : o.defaultCpa];
+    })));
+  const [attributionDays, setAttributionDays] = useState<number>(pick(targets[0]?.['attributionDays' as never], 7));
+  const [minConversions, setMinConversions] = useState<number>(pick(targets[0]?.['minConversions' as never], 10));
+  const [minClicks, setMinClicks] = useState<number>(pick(targets[0]?.['minClicks' as never], 100));
+  const [protectedIds, setProtectedIds] = useState<string[]>(pick(ep.protectedCampaignIds, []));
+  const [maxPauses, setMaxPauses] = useState<number>(pick(ep.maxPausesPerRun, 3));
+  const [liveMode, setLiveMode] = useState(ep.mode === 'live');
 
   // budget_schedule — mặc định một khung giờ vàng buổi tối
-  const [slots, setSlots] = useState<{ startHour: number; endHour: number; percent: number }[]>([
-    { startHour: 19, endHour: 23, percent: 150 },
-  ]);
+  const [slots, setSlots] = useState<{ startHour: number; endHour: number; percent: number }[]>(
+    Array.isArray(ep.slots) && ep.slots.length ? ep.slots : [{ startHour: 19, endHour: 23, percent: 150 }]);
 
   // post_trigger
   const [pages, setPages] = useState<{ pageId: string; name: string; hasToken: boolean }[]>([]);
   const [pagesLoading, setPagesLoading] = useState(false);
   const [pagesError, setPagesError] = useState('');
-  const [pageId, setPageId] = useState('');
-  const [keywordText, setKeywordText] = useState('');
-  const [matchMode, setMatchMode] = useState<'any' | 'all'>('any');
-  const [postBudget, setPostBudget] = useState(50_000);
-  const [maxPostAgeHours, setMaxPostAgeHours] = useState(24);
-  const [maxPerRun, setMaxPerRun] = useState(2);
-  const [ageMin, setAgeMin] = useState(18);
-  const [ageMax, setAgeMax] = useState(65);
+  const [pageId, setPageId] = useState<string>(pick(ep.pageId, ''));
+  const [keywordText, setKeywordText] = useState(
+    Array.isArray(ep.keywords) ? ep.keywords.join('\n') : '');
+  const [matchMode, setMatchMode] = useState<'any' | 'all'>(pick(ep.matchMode, 'any'));
+  const [postBudget, setPostBudget] = useState<number>(
+    typeof ep.dailyBudgetMicros === 'number' ? Math.round(ep.dailyBudgetMicros / 1_000_000) : 50_000);
+  const [maxPostAgeHours, setMaxPostAgeHours] = useState<number>(pick(ep.maxPostAgeHours, 24));
+  const [maxPerRun, setMaxPerRun] = useState<number>(pick(ep.maxPerRun, 2));
+  const [ageMin, setAgeMin] = useState<number>(pick(ep.ageMin, 18));
+  const [ageMax, setAgeMax] = useState<number>(pick(ep.ageMax, 65));
 
   // Mỗi từ khoá một dòng hoặc ngăn bằng dấu phẩy — người dùng gõ kiểu nào cũng được.
   const keywords = useMemo(
@@ -161,14 +188,22 @@ export function NewConfigModal({
           maxPausesPerRun: maxPauses,
         };
 
-    const res = await fetch('/api/configs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kind, name, adAccountId: accountId, intervalMinutes: interval, params }),
-    });
+    // Sửa thì PUT vào chính cấu hình đó; loại và tài khoản không đổi được.
+    const res = editing
+      ? await fetch(`/api/configs/${editing.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, intervalMinutes: interval, params }),
+        })
+      : await fetch('/api/configs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind, name, adAccountId: accountId, intervalMinutes: interval, params }),
+        });
     setBusy(false);
     if (res.ok) onCreated();
-    else setError((await res.json().catch(() => ({}))).error ?? 'Không tạo được cấu hình');
+    else setError((await res.json().catch(() => ({}))).error
+      ?? (editing ? 'Không lưu được thay đổi' : 'Không tạo được cấu hình'));
   }
 
   const usable = IMPLEMENTED.includes(kind) && READY_PLATFORMS.includes(platform)
@@ -192,7 +227,7 @@ export function NewConfigModal({
                  display: 'flex', flexDirection: 'column' }}
       >
         <div className="card-head">
-          <b style={{ fontSize: 16 }}>Thêm cấu hình mới</b>
+          <b style={{ fontSize: 16 }}>{editing ? `Sửa: ${editing.name}` : 'Thêm cấu hình mới'}</b>
           <button className="btn btn-ghost" style={{ padding: '4px 10px' }} onClick={onClose}>✕</button>
         </div>
 
@@ -201,7 +236,9 @@ export function NewConfigModal({
           <div style={{ borderRight: '1px solid var(--line)', padding: 12,
                         overflowY: 'auto', background: 'var(--side)' }}>
             {KINDS.map((k) => {
-              const ready = IMPLEMENTED.includes(k);
+              // Sửa thì không cho đổi loại: params của loại này không dùng được
+              // cho loại kia, và nhật ký đã gắn với loại cũ.
+              const ready = IMPLEMENTED.includes(k) && (!editing || editing.kind === k);
               const on = kind === k;
               return (
                 <button
@@ -265,7 +302,7 @@ export function NewConfigModal({
             </Section>
 
             <Section title="Tài khoản quảng cáo">
-              <select style={inputStyle} value={accountId}
+              <select style={inputStyle} value={accountId} disabled={!!editing}
                       onChange={(e) => { setAccountId(e.target.value); setProtectedIds([]); }}>
                 {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
@@ -365,6 +402,7 @@ export function NewConfigModal({
                   <div className="note" style={{ maxWidth: 'none', marginTop: 8 }}>
                     Khung giờ <b>không được chồng lên nhau</b> — nếu chồng thì kết quả phụ
                     thuộc thứ tự và không đoán được. Giờ tính theo múi giờ Việt Nam.
+                    Khung <b>vắt qua nửa đêm</b> viết bình thường: <span className="mono">22 → 6</span>.
                   </div>
                 </Section>
 
@@ -571,7 +609,10 @@ export function NewConfigModal({
               background: 'var(--acc-soft)', borderRadius: 'var(--r-sm)',
               padding: '11px 13px', fontSize: 12.5, color: 'var(--acc-ink)', lineHeight: 1.5,
             }}>
-              Cấu hình tạo ra ở trạng thái <b>nháp</b> — chưa chạy. Bật ở danh sách khi bạn sẵn sàng.
+              {editing
+                ? <>Thay đổi có hiệu lực từ <b>lượt chạy tiếp theo</b>. Trạng thái bật/tắt
+                   và chế độ chạy thử/ghi thật giữ nguyên như hiện tại.</>
+                : <>Cấu hình tạo ra ở trạng thái <b>nháp</b> — chưa chạy. Bật ở danh sách khi bạn sẵn sàng.</>}
             </div>
           </div>
         </div>
@@ -581,7 +622,7 @@ export function NewConfigModal({
           <button className="btn btn-ghost" onClick={onClose}>Hủy</button>
           <button className="btn" onClick={submit}
                   disabled={busy || !usable || !name.trim() || !accountId}>
-            {busy ? 'Đang tạo…' : 'Tạo cấu hình'}
+            {busy ? (editing ? 'Đang lưu…' : 'Đang tạo…') : (editing ? 'Lưu thay đổi' : 'Tạo cấu hình')}
           </button>
         </div>
       </div>

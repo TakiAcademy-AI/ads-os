@@ -100,6 +100,14 @@ export interface CampaignRow {
    * này vô nghĩa, và guard không được phép tắt nó.
    */
   conversionAction: string | null;
+  /** Lượt hiển thị cộng dồn trong kỳ. */
+  impressions: number;
+  /** Người tiếp cận — ngày cao nhất, KHÔNG cộng dồn (sẽ đếm trùng người). */
+  reachPeak: number;
+  /** Tỷ lệ nhấp tính lại từ click/impressions, 0–1. */
+  ctr: number;
+  /** Chỉ số kéo thêm của ngày gần nhất. Rỗng nếu cấu hình không kéo gì thêm. */
+  extraMetrics: Record<string, unknown>;
 }
 
 /**
@@ -141,7 +149,8 @@ export async function listCampaigns(
 
   const { rows: metrics } = await db.query(
     `SELECT campaign_id, to_char(date,'YYYY-MM-DD') date_str,
-            spend_micros, conversions, clicks, conversion_action
+            spend_micros, conversions, clicks, conversion_action,
+            impressions, reach, ctr, extra_metrics
      FROM ad_metric_daily
      WHERE ad_account_id = $1 AND campaign_id IS NOT NULL
        AND date > CURRENT_DATE - $2::int
@@ -151,7 +160,22 @@ export async function listCampaigns(
 
   const byCampaign = new Map<string, MetricRow[]>();
   const actionByCampaign = new Map<string, string | null>();
+  // Cột impressions/reach/ctr và extra_metrics vẫn được ghi từ lâu nhưng trước
+  // đây không trang nào đọc — người dùng chọn chỉ số kéo thêm, tốn quota API,
+  // rồi không thấy chúng ở đâu cả.
+  const reachByCampaign = new Map<string, { impressions: number; reach: number; clicks: number }>();
+  const extraByCampaign = new Map<string, Record<string, unknown>>();
   for (const m of metrics) {
+    const agg = reachByCampaign.get(m.campaign_id) ?? { impressions: 0, reach: 0, clicks: 0 };
+    agg.impressions += Number(m.impressions ?? 0);
+    // reach là số NGƯỜI duy nhất, cộng dồn theo ngày là sai về mặt thống kê —
+    // lấy ngày cao nhất làm cận dưới thay vì đưa ra con số phóng đại.
+    agg.reach = Math.max(agg.reach, Number(m.reach ?? 0));
+    agg.clicks += Number(m.clicks ?? 0);
+    reachByCampaign.set(m.campaign_id, agg);
+    if (m.extra_metrics && Object.keys(m.extra_metrics).length) {
+      extraByCampaign.set(m.campaign_id, m.extra_metrics as Record<string, unknown>);
+    }
     // Lấy loại hành động của dòng gần nhất có giá trị — đủ để báo cho người
     // dùng biết con số đang dựa trên cái gì.
     if (m.conversion_action) actionByCampaign.set(m.campaign_id, m.conversion_action);
@@ -188,6 +212,15 @@ export async function listCampaigns(
       targetCpaMicros: target,
       assessment: assessCpa(rows, target, opts),
       conversionAction: actionByCampaign.get(c.id) ?? null,
+      impressions: reachByCampaign.get(c.id)?.impressions ?? 0,
+      reachPeak: reachByCampaign.get(c.id)?.reach ?? 0,
+      // Tính lại từ tổng thay vì lấy trung bình ctr theo ngày — trung bình của
+      // tỷ lệ không bằng tỷ lệ của tổng khi lượng hiển thị mỗi ngày khác nhau.
+      ctr: (() => {
+        const a = reachByCampaign.get(c.id);
+        return a && a.impressions > 0 ? a.clicks / a.impressions : 0;
+      })(),
+      extraMetrics: extraByCampaign.get(c.id) ?? {},
     };
   });
 }

@@ -34,6 +34,17 @@ export default async function ConfigsPage() {
     (campaigns[r.ad_account_id] ??= []).push({ id: r.id, name: r.name, objective: r.objective });
   }
 
+  // Cấu hình gắn với tài khoản đã ngắt kết nối không hiện ở bất kỳ tab nào —
+  // không tạm dừng được, không xoá được, và bộ chạy cũng bỏ qua. Chúng vô hại
+  // nhưng đã tàng hình khỏi giao diện, nên phải nói ra.
+  const { rows: orphanRows } = await db.query(
+    `SELECT c.name, a.name AS account_name, a.status
+     FROM automation_config c JOIN ad_account a ON a.id = c.ad_account_id
+     WHERE c.owner_id = $1 AND a.status <> 'active'
+     ORDER BY a.name, c.name`,
+    [user.id],
+  );
+
   return (
     <>
       <div className="page-head">
@@ -51,6 +62,18 @@ export default async function ConfigsPage() {
           </div>
         ))}
       </div>
+
+      {orphanRows.length > 0 && (
+        <div style={{
+          background: 'var(--amb-soft)', color: 'var(--amb)', fontSize: 12.5,
+          padding: '11px 14px', borderRadius: 'var(--r)', marginBottom: 14, lineHeight: 1.55,
+        }}>
+          <b>{orphanRows.length} cấu hình đang gắn với tài khoản chưa kết nối</b> nên
+          không hiện trong bảng dưới và không chạy:{' '}
+          {orphanRows.map((r) => `${r.name} (${r.account_name})`).join(', ')}.
+          Kết nối lại tài khoản đó ở tab Kết nối thì chúng sẽ xuất hiện trở lại.
+        </div>
+      )}
 
       <ConfigBrowser
         configs={configs}

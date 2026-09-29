@@ -34,6 +34,12 @@ function Row({ c }: { c: CampaignRow }) {
           {OBJECTIVE_LABEL[c.objective] ?? c.objective} · {CAMPAIGN_STATUS[c.status.toUpperCase()] ?? c.status} · {num(c.conversions)} kết quả
           {c.isWhitelisted && <> · <span className="tag tag-mute">được bảo vệ</span></>}
         </div>
+        {Object.keys(c.extraMetrics).length > 0 && (
+          <div className="cell-sub mono" style={{ opacity: .7 }}>
+            {Object.entries(c.extraMetrics).slice(0, 4)
+              .map(([k, v]) => `${k}: ${v}`).join(' · ')}
+          </div>
+        )}
         {c.conversionAction
           ? <div className="cell-sub mono" style={{ opacity: .75 }}>đếm theo {c.conversionAction}</div>
           : c.spendMicros > 0 && (
@@ -41,6 +47,12 @@ function Row({ c }: { c: CampaignRow }) {
                 không đo được chuyển đổi
               </div>
             )}
+      </td>
+      <td className="n mono" style={{ color: 'var(--dim)' }}>
+        {c.impressions > 0 ? num(c.impressions) : '—'}
+        {c.ctr > 0 && (
+          <div className="cell-sub">CTR {(c.ctr * 100).toFixed(2)}%</div>
+        )}
       </td>
       <td className="n mono">{vnd(c.spendMicros)}</td>
       <td className={`n mono ${a.overRaw ? 'bad' : ''}`}>{vnd(a.cpaRawMicros)}</td>
@@ -143,6 +155,7 @@ export default async function CampaignsPage() {
             <thead>
               <tr>
                 <th>Chiến dịch</th>
+                <th className="n">Hiển thị</th>
                 <th className="n">Chi tiêu</th>
                 <th className="n">CPA thô</th>
                 <th className="n">CPA đã chín</th>
