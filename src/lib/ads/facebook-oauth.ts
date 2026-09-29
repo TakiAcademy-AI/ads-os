@@ -13,8 +13,18 @@ const DIALOG = 'https://www.facebook.com';
 // chỉ nhận null/undefined nên sẽ truyền chuỗi rỗng đi tiếp.
 const VERSION = process.env.FB_API_VERSION || 'v23.0';
 
-/** Chỉ xin quyền đọc. Thêm scope là mở rộng thứ token làm được — cân nhắc kỹ. */
-export const SCOPES = ['ads_read', 'business_management'] as const;
+/**
+ * Quyền xin khi đăng nhập Facebook.
+ *
+ * ads_management cần cho việc tắt/bật chiến dịch và đổi ngân sách. Ở chế độ
+ * Development, Facebook cấp quyền này cho tài khoản có vai trò trong app mà
+ * KHÔNG cần App Review — chỉ khi phục vụ tài khoản của người ngoài mới cần.
+ *
+ * Có quyền không đồng nghĩa với được phép hành động: mọi lệnh ghi vẫn phải đi
+ * qua guard attribution, danh sách bảo vệ, trần thiệt hại, và mặc định
+ * mode='dry_run'. Quyền chỉ là điều kiện cần.
+ */
+export const SCOPES = ['ads_read', 'ads_management', 'business_management'] as const;
 
 export interface OAuthConfig {
   appId: string;
