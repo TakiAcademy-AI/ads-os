@@ -67,6 +67,40 @@ export async function setCampaignStatus(
   await write(`/${campaignExternalId}`, { status }, token);
 }
 
+/**
+ * Đổi ngân sách/ngày của chiến dịch (CBO).
+ *
+ * Facebook nhận đơn vị nhỏ nhất của tiền tệ, KHÔNG phải micros — VND thì là
+ * đồng, USD thì là cents. Cùng cái bẫy với spendToMicros, chỉ ngược chiều.
+ */
+export async function setCampaignDailyBudget(
+  token: string,
+  campaignExternalId: string,
+  budgetMicros: number,
+): Promise<void> {
+  // micros → đồng. VND không có đơn vị phụ nên chia đúng 1.000.000.
+  const value = Math.round(budgetMicros / 1_000_000);
+  if (value <= 0) {
+    throw new FacebookWriteError('Ngân sách phải lớn hơn 0');
+  }
+  await write(`/${campaignExternalId}`, { daily_budget: String(value) }, token);
+}
+
+/** Đọc lại ngân sách, trả về micros. null nếu không đọc được. */
+export async function readCampaignBudget(
+  token: string,
+  campaignExternalId: string,
+): Promise<number | null> {
+  const res = await fetch(
+    `${GRAPH}/${VERSION}/${campaignExternalId}?fields=daily_budget`,
+    { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(TIMEOUT_MS) },
+  );
+  if (!res.ok) return null;
+  const json = (await res.json().catch(() => ({}))) as { daily_budget?: string };
+  if (!json.daily_budget) return null;
+  return Math.round(Number(json.daily_budget) * 1_000_000);
+}
+
 /** Đọc lại trạng thái để xác nhận lệnh đã ăn — không tin response, tin dữ liệu. */
 export async function readCampaignStatus(
   token: string,

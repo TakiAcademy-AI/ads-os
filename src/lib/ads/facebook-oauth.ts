@@ -24,7 +24,16 @@ const VERSION = process.env.FB_API_VERSION || 'v23.0';
  * qua guard attribution, danh sách bảo vệ, trần thiệt hại, và mặc định
  * mode='dry_run'. Quyền chỉ là điều kiện cần.
  */
-export const SCOPES = ['ads_read', 'ads_management', 'business_management'] as const;
+export const SCOPES = [
+  'ads_read',
+  'ads_management',
+  'business_management',
+  // Cần cho "Tự động chạy ads": đọc danh sách Page và bài viết mới.
+  // Thiếu scope này thì /me/accounts trả MẢNG RỖNG chứ không báo lỗi —
+  // rất dễ tưởng tài khoản không có Page nào.
+  'pages_show_list',
+  'pages_read_engagement',
+] as const;
 
 export interface OAuthConfig {
   appId: string;

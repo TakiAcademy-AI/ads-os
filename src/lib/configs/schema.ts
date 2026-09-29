@@ -75,12 +75,22 @@ export const MetricSyncParams = z.object({
 });
 
 export const BudgetScheduleParams = z.object({
+  platform: z.enum(PLATFORMS).default('facebook'),
+  mode: z.enum(['dry_run', 'live']).default('dry_run'),
   slots: z.array(z.object({
     startHour: z.number().int().min(0).max(23),
     endHour: z.number().int().min(1).max(24),
-    /** Phần trăm so với ngân sách gốc. 100 = giữ nguyên. */
+    /** Phần trăm so với NGÂN SÁCH GỐC, không phải giá trị hiện tại. */
     percent: z.number().int().min(10).max(500),
-  })).default([]),
+  }))
+    .default([])
+    // Khung giờ chồng nhau thì kết quả phụ thuộc thứ tự mảng — người dùng đặt
+    // 19-22h 150% và 20-23h 80% sẽ không đoán được cái nào thắng.
+    .refine((slots) => {
+      const sorted = [...slots].sort((a, b) => a.startHour - b.startHour);
+      return sorted.every((s, i) =>
+        s.endHour > s.startHour && (i === 0 || s.startHour >= sorted[i - 1]!.endHour));
+    }, 'Khung giờ không được chồng lên nhau, và giờ kết thúc phải sau giờ bắt đầu'),
 });
 
 export const PostTriggerParams = z.object({

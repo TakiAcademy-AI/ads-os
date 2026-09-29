@@ -5,7 +5,7 @@ import { KINDS, KIND_LABEL, KIND_DESC, PLATFORMS, type AutomationKind, type Plat
 import { fieldsFor, REQUIRED_KEYS } from '@/lib/ads/metric-catalog';
 import { MultiSelect, type Option } from '@/components/multi-select';
 
-const IMPLEMENTED: AutomationKind[] = ['metric_sync', 'auto_pause'];
+const IMPLEMENTED: AutomationKind[] = ['metric_sync', 'auto_pause', 'budget_schedule'];
 const READY_PLATFORMS: Platform[] = ['facebook'];
 
 const PLATFORM_LABEL: Record<Platform, string> = {
@@ -73,6 +73,11 @@ export function NewConfigModal({
   const [maxPauses, setMaxPauses] = useState(3);
   const [liveMode, setLiveMode] = useState(false);
 
+  // budget_schedule — mặc định một khung giờ vàng buổi tối
+  const [slots, setSlots] = useState<{ startHour: number; endHour: number; percent: number }[]>([
+    { startHour: 19, endHour: 23, percent: 150 },
+  ]);
+
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -90,6 +95,8 @@ export function NewConfigModal({
 
     const params = kind === 'metric_sync'
       ? { platform, lookbackDays, level, extraFields }
+      : kind === 'budget_schedule'
+      ? { platform, mode: liveMode ? 'live' : 'dry_run', slots }
       : {
           platform,
           mode: liveMode ? 'live' : 'dry_run',
@@ -257,6 +264,88 @@ export function NewConfigModal({
               </>
             )}
 
+            {kind === 'budget_schedule' && (
+              <>
+                <Section title="Khung giờ"
+                         hint="Phần trăm tính từ NGÂN SÁCH GỐC, không phải giá trị hiện tại — nếu không sẽ nhân dồn qua mỗi lượt. Ngoài mọi khung giờ thì tự trả về 100%.">
+                  {slots.map((sl, i) => (
+                    <div key={i} style={{
+                      display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8,
+                      padding: '9px 12px', border: '1px solid var(--line)',
+                      borderRadius: 'var(--r-sm)',
+                    }}>
+                      <input type="number" min={0} max={23} value={sl.startHour}
+                             onChange={(e) => setSlots(slots.map((x, j) =>
+                               j === i ? { ...x, startHour: Number(e.target.value) } : x))}
+                             style={{ ...inputStyle, width: 64, padding: '6px 9px', fontSize: 13 }} />
+                      <span style={{ fontSize: 12.5, color: 'var(--dim)' }}>giờ →</span>
+                      <input type="number" min={1} max={24} value={sl.endHour}
+                             onChange={(e) => setSlots(slots.map((x, j) =>
+                               j === i ? { ...x, endHour: Number(e.target.value) } : x))}
+                             style={{ ...inputStyle, width: 64, padding: '6px 9px', fontSize: 13 }} />
+                      <span style={{ fontSize: 12.5, color: 'var(--dim)', flex: 1 }}>giờ, chạy</span>
+                      <input type="number" min={10} max={500} step={10} value={sl.percent}
+                             onChange={(e) => setSlots(slots.map((x, j) =>
+                               j === i ? { ...x, percent: Number(e.target.value) } : x))}
+                             style={{ ...inputStyle, width: 84, padding: '6px 9px', fontSize: 13 }} />
+                      <span style={{ fontSize: 12.5, color: 'var(--dim)' }}>%</span>
+                      <button type="button" onClick={() => setSlots(slots.filter((_, j) => j !== i))}
+                              className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 9px' }}>✕</button>
+                    </div>
+                  ))}
+                  <button type="button" className="btn btn-ghost" style={{ fontSize: 12.5 }}
+                          onClick={() => setSlots([...slots, { startHour: 0, endHour: 6, percent: 50 }])}>
+                    + Thêm khung giờ
+                  </button>
+                  <div className="note" style={{ maxWidth: 'none', marginTop: 8 }}>
+                    Khung giờ <b>không được chồng lên nhau</b> — nếu chồng thì kết quả phụ
+                    thuộc thứ tự và không đoán được. Giờ tính theo múi giờ Việt Nam.
+                  </div>
+                </Section>
+
+                <Section title="Chỉ áp dụng cho chiến dịch đặt ngân sách cấp chiến dịch"
+                         hint="Chiến dịch đặt ngân sách ở cấp nhóm quảng cáo (ABO) chưa được hỗ trợ.">
+                  <div />
+                </Section>
+              </>
+            )}
+
+            {(kind === 'auto_pause' || kind === 'budget_schedule') && (
+              <div style={{
+                border: `1px solid ${liveMode ? 'var(--red)' : 'var(--line)'}`,
+                background: liveMode ? 'var(--red-soft)' : 'var(--side)',
+                borderRadius: 'var(--r-sm)', padding: '13px 15px', marginBottom: 16,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 500,
+                                  color: liveMode ? 'var(--red)' : 'var(--ink)' }}>
+                      {liveMode ? 'Ghi thật lên tài khoản quảng cáo' : 'Chạy thử — chỉ ghi đề xuất'}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--dim)', marginTop: 3, lineHeight: 1.45 }}>
+                      {liveMode
+                        ? (kind === 'auto_pause'
+                            ? 'Bot sẽ TẮT chiến dịch thật. Mọi thay đổi vẫn ghi vào nhật ký.'
+                            : 'Bot sẽ ĐỔI NGÂN SÁCH thật. Mọi thay đổi vẫn ghi vào nhật ký.')
+                        : 'Bot chỉ ghi đề xuất vào nhật ký, không đụng vào tài khoản. Nên chạy vài tuần ở chế độ này trước.'}
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setLiveMode((v) => !v)}
+                          style={{
+                            width: 42, height: 24, borderRadius: 999, border: 0, flex: 'none',
+                            background: liveMode ? 'var(--red)' : 'var(--line-strong)',
+                            position: 'relative', cursor: 'pointer',
+                          }}>
+                    <span style={{
+                      position: 'absolute', top: 3, left: liveMode ? 21 : 3,
+                      width: 18, height: 18, borderRadius: '50%', background: '#fff',
+                      transition: 'left .15s',
+                    }} />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {kind === 'auto_pause' && (
               <>
                 <Section title="Ngưỡng CPA theo loại chiến dịch"
@@ -320,37 +409,6 @@ export function NewConfigModal({
                          onChange={(e) => setMaxPauses(Number(e.target.value))} style={inputStyle} />
                 </Section>
 
-                <div style={{
-                  border: `1px solid ${liveMode ? 'var(--red)' : 'var(--line)'}`,
-                  background: liveMode ? 'var(--red-soft)' : 'var(--side)',
-                  borderRadius: 'var(--r-sm)', padding: '13px 15px', marginBottom: 6,
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 500,
-                                    color: liveMode ? 'var(--red)' : 'var(--ink)' }}>
-                        {liveMode ? 'Ghi thật lên tài khoản quảng cáo' : 'Chạy thử — chỉ ghi đề xuất'}
-                      </div>
-                      <div style={{ fontSize: 11.5, color: 'var(--dim)', marginTop: 3, lineHeight: 1.45 }}>
-                        {liveMode
-                          ? 'Bot sẽ TẮT chiến dịch thật khi CPA đã chín vượt ngưỡng. Mọi thay đổi vẫn ghi vào nhật ký và hoàn tác được.'
-                          : 'Bot chỉ ghi đề xuất vào nhật ký, không đụng vào tài khoản. Nên chạy vài tuần ở chế độ này trước.'}
-                      </div>
-                    </div>
-                    <button type="button" onClick={() => setLiveMode((v) => !v)}
-                            style={{
-                              width: 42, height: 24, borderRadius: 999, border: 0, flex: 'none',
-                              background: liveMode ? 'var(--red)' : 'var(--line-strong)',
-                              position: 'relative', cursor: 'pointer',
-                            }}>
-                      <span style={{
-                        position: 'absolute', top: 3, left: liveMode ? 21 : 3,
-                        width: 18, height: 18, borderRadius: '50%', background: '#fff',
-                        transition: 'left .15s',
-                      }} />
-                    </button>
-                  </div>
-                </div>
               </>
             )}
 

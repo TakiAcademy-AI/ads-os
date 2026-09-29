@@ -7,6 +7,7 @@
 import { db } from '../db';
 import { syncAccount } from '../ads/sync';
 import { runAutoPause } from './auto-pause';
+import { runBudgetSchedule } from './budget-schedule';
 import { safeParams, type AutomationKind } from '../configs/schema';
 
 export interface ConfigRunResult {
@@ -69,9 +70,18 @@ export async function runDueConfigs(): Promise<CronResult> {
           + `${r.proposed} đề xuất · ${r.failed} lỗi · ${r.blocked} bị guard chặn · `
           + `${r.skipped} đã ghi trước đó`
           + (r.notes.length ? ` · ${r.notes.join('; ')}` : '');
+      } else if (c.kind === 'budget_schedule') {
+        const p = c.params as { mode?: string };
+        const r = await runBudgetSchedule(
+          c.ad_account_id, c.params, p.mode === 'live' ? 'live' : 'dry_run',
+        );
+        ok = r.failed === 0;
+        message = `xét ${r.evaluated} chiến dịch · ${r.changed} đổi ngân sách · `
+          + `${r.failed} lỗi · ${r.unchanged} đã đúng mức · ${r.skipped} đã ghi trước đó`
+          + (r.notes.length ? ` · ${r.notes.join('; ')}` : '');
       } else {
-        // budget_schedule / post_trigger chưa có lớp thực thi. Ghi rõ thay vì
-        // lặng lẽ đánh dấu đã chạy — nếu không người dùng tưởng nó đang chạy.
+        // post_trigger chưa có lớp thực thi. Ghi rõ thay vì lặng lẽ đánh dấu đã
+        // chạy — nếu không người dùng tưởng nó đang chạy.
         message = `Loại "${c.kind}" chưa được hỗ trợ thực thi`;
       }
     } catch (e) {
