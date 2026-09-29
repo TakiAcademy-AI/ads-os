@@ -1,11 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { KINDS, KIND_LABEL, KIND_DESC, PLATFORMS, type AutomationKind, type Platform } from '@/lib/configs/schema';
 import { fieldsFor, REQUIRED_KEYS } from '@/lib/ads/metric-catalog';
 import { MultiSelect, type Option } from '@/components/multi-select';
 
-const IMPLEMENTED: AutomationKind[] = ['metric_sync', 'auto_pause', 'budget_schedule'];
+const IMPLEMENTED: AutomationKind[] = ['metric_sync', 'auto_pause', 'budget_schedule', 'post_trigger'];
 const READY_PLATFORMS: Platform[] = ['facebook'];
 
 const PLATFORM_LABEL: Record<Platform, string> = {
@@ -78,6 +78,45 @@ export function NewConfigModal({
     { startHour: 19, endHour: 23, percent: 150 },
   ]);
 
+  // post_trigger
+  const [pages, setPages] = useState<{ pageId: string; name: string; hasToken: boolean }[]>([]);
+  const [pagesLoading, setPagesLoading] = useState(false);
+  const [pagesError, setPagesError] = useState('');
+  const [pageId, setPageId] = useState('');
+  const [keywordText, setKeywordText] = useState('');
+  const [matchMode, setMatchMode] = useState<'any' | 'all'>('any');
+  const [postBudget, setPostBudget] = useState(50_000);
+  const [maxPostAgeHours, setMaxPostAgeHours] = useState(24);
+  const [maxPerRun, setMaxPerRun] = useState(2);
+  const [ageMin, setAgeMin] = useState(18);
+  const [ageMax, setAgeMax] = useState(65);
+
+  // Mỗi từ khoá một dòng hoặc ngăn bằng dấu phẩy — người dùng gõ kiểu nào cũng được.
+  const keywords = useMemo(
+    () => keywordText.split(/[\n,]/).map((k) => k.trim()).filter(Boolean),
+    [keywordText],
+  );
+
+  useEffect(() => {
+    if (kind !== 'post_trigger' || pages.length > 0 || pagesLoading) return;
+    setPagesLoading(true);
+    fetch('/api/pages')
+      .then((r) => r.json())
+      .then((d) => setPages(d.pages ?? []))
+      .catch(() => setPagesError('Không tải được danh sách Page'))
+      .finally(() => setPagesLoading(false));
+  }, [kind, pages.length, pagesLoading]);
+
+  async function reloadPages() {
+    setPagesLoading(true);
+    setPagesError('');
+    const res = await fetch('/api/pages', { method: 'POST' });
+    const d = await res.json().catch(() => ({}));
+    setPagesLoading(false);
+    if (res.ok) setPages(d.pages ?? []);
+    else setPagesError(d.error ?? 'Không nạp lại được');
+  }
+
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -97,6 +136,19 @@ export function NewConfigModal({
       ? { platform, lookbackDays, level, extraFields }
       : kind === 'budget_schedule'
       ? { platform, mode: liveMode ? 'live' : 'dry_run', slots }
+      : kind === 'post_trigger'
+      ? {
+          platform,
+          mode: liveMode ? 'live' : 'dry_run',
+          pageId,
+          pageName: pages.find((p) => p.pageId === pageId)?.name ?? '',
+          keywords, matchMode,
+          dailyBudgetMicros: Math.round(postBudget * 1_000_000),
+          countries: ['VN'],
+          ageMin, ageMax,
+          maxPostAgeHours, maxPerRun,
+          createPaused: true,
+        }
       : {
           platform,
           mode: liveMode ? 'live' : 'dry_run',
@@ -119,7 +171,10 @@ export function NewConfigModal({
     else setError((await res.json().catch(() => ({}))).error ?? 'Không tạo được cấu hình');
   }
 
-  const usable = IMPLEMENTED.includes(kind) && READY_PLATFORMS.includes(platform);
+  const usable = IMPLEMENTED.includes(kind) && READY_PLATFORMS.includes(platform)
+    // post_trigger thiếu Page hoặc thiếu từ khoá thì tạo ra một cấu hình không
+    // bao giờ làm gì — chặn ngay ở nút bấm thay vì để người dùng chờ vô ích.
+    && (kind !== 'post_trigger' || (!!pageId && keywords.length > 0));
 
   return (
     <div
@@ -310,7 +365,94 @@ export function NewConfigModal({
               </>
             )}
 
-            {(kind === 'auto_pause' || kind === 'budget_schedule') && (
+            {kind === 'post_trigger' && (
+              <>
+                <Section title="Page nguồn"
+                         hint="Bài viết đọc bằng token riêng của Page. Không thấy Page nào thì bấm Nạp lại — thường là do lúc kết nối chưa tick đủ Page.">
+                  {pagesError && <div className="err" style={{ marginBottom: 8 }}>{pagesError}</div>}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <select style={{ ...inputStyle, flex: 1 }} value={pageId}
+                            onChange={(e) => setPageId(e.target.value)}>
+                      <option value="">
+                        {pagesLoading ? 'Đang tải…' : pages.length ? '— Chọn Page —' : 'Chưa có Page nào'}
+                      </option>
+                      {pages.map((p) => (
+                        <option key={p.pageId} value={p.pageId} disabled={!p.hasToken}>
+                          {p.name}{p.hasToken ? '' : ' (thiếu token)'}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" className="btn btn-ghost" onClick={reloadPages}
+                            disabled={pagesLoading} style={{ fontSize: 12.5, flex: 'none' }}>
+                      Nạp lại
+                    </button>
+                  </div>
+                </Section>
+
+                <Section title="Từ khoá kích hoạt"
+                         hint="Mỗi dòng một từ khoá, hoặc ngăn bằng dấu phẩy. Không phân biệt hoa thường và không phân biệt dấu — gõ “khuyen mai” vẫn bắt được “khuyến mãi”.">
+                  <textarea
+                    value={keywordText} onChange={(e) => setKeywordText(e.target.value)}
+                    rows={3} placeholder={'khuyến mãi\nsale\ngiảm giá'}
+                    style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }} />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+                    {(['any', 'all'] as const).map((m) => (
+                      <button key={m} type="button" onClick={() => setMatchMode(m)}
+                              className={matchMode === m ? 'btn' : 'btn btn-ghost'}
+                              style={{ fontSize: 12.5 }}>
+                        {m === 'any' ? 'Khớp bất kỳ từ khoá' : 'Phải khớp tất cả'}
+                      </button>
+                    ))}
+                    <span style={{ fontSize: 11.5, color: 'var(--dim)', marginLeft: 'auto' }}>
+                      {keywords.length} từ khoá
+                    </span>
+                  </div>
+                </Section>
+
+                <Section title="Chiến dịch sinh ra"
+                         hint="Mục tiêu cố định là Tương tác bài viết — đây là loại duy nhất chạy được thẳng từ một bài đăng mà không cần pixel hay trang đích.">
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 9 }}>
+                    <div>
+                      <div style={{ fontSize: 11.5, color: 'var(--dim)', marginBottom: 4 }}>Ngân sách/ngày (đ)</div>
+                      <input type="number" min={1000} step={1000} value={postBudget}
+                             onChange={(e) => setPostBudget(Number(e.target.value))} style={inputStyle} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11.5, color: 'var(--dim)', marginBottom: 4 }}>Tuổi từ</div>
+                      <input type="number" min={13} max={65} value={ageMin}
+                             onChange={(e) => setAgeMin(Number(e.target.value))} style={inputStyle} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11.5, color: 'var(--dim)', marginBottom: 4 }}>đến</div>
+                      <input type="number" min={13} max={65} value={ageMax}
+                             onChange={(e) => setAgeMax(Number(e.target.value))} style={inputStyle} />
+                    </div>
+                  </div>
+                </Section>
+
+                <Section title="Giới hạn an toàn"
+                         hint="Bài cũ hơn mốc này bị bỏ qua, và mỗi lượt chạy tạo tối đa bấy nhiêu chiến dịch.">
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9 }}>
+                    <div>
+                      <div style={{ fontSize: 11.5, color: 'var(--dim)', marginBottom: 4 }}>Chỉ bài trong (giờ)</div>
+                      <input type="number" min={1} max={168} value={maxPostAgeHours}
+                             onChange={(e) => setMaxPostAgeHours(Number(e.target.value))} style={inputStyle} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11.5, color: 'var(--dim)', marginBottom: 4 }}>Tối đa mỗi lượt</div>
+                      <input type="number" min={1} max={10} value={maxPerRun}
+                             onChange={(e) => setMaxPerRun(Number(e.target.value))} style={inputStyle} />
+                    </div>
+                  </div>
+                  <div className="note" style={{ maxWidth: 'none', marginTop: 8 }}>
+                    Cấu hình <b>không bao giờ đào lại bài cũ hơn thời điểm nó được tạo</b>, kể cả
+                    khi bạn đặt mốc 168 giờ. Bật lên không làm nổ một loạt chiến dịch từ quá khứ.
+                  </div>
+                </Section>
+              </>
+            )}
+
+            {(kind === 'auto_pause' || kind === 'budget_schedule' || kind === 'post_trigger') && (
               <div style={{
                 border: `1px solid ${liveMode ? 'var(--red)' : 'var(--line)'}`,
                 background: liveMode ? 'var(--red-soft)' : 'var(--side)',
@@ -326,7 +468,10 @@ export function NewConfigModal({
                       {liveMode
                         ? (kind === 'auto_pause'
                             ? 'Bot sẽ TẮT chiến dịch thật. Mọi thay đổi vẫn ghi vào nhật ký.'
-                            : 'Bot sẽ ĐỔI NGÂN SÁCH thật. Mọi thay đổi vẫn ghi vào nhật ký.')
+                            : kind === 'budget_schedule'
+                            ? 'Bot sẽ ĐỔI NGÂN SÁCH thật. Mọi thay đổi vẫn ghi vào nhật ký.'
+                            : 'Bot sẽ TẠO chiến dịch thật trong tài khoản — nhưng luôn ở trạng thái '
+                              + 'TẠM DỪNG, bạn phải tự bật thì mới tiêu tiền.')
                         : 'Bot chỉ ghi đề xuất vào nhật ký, không đụng vào tài khoản. Nên chạy vài tuần ở chế độ này trước.'}
                     </div>
                   </div>

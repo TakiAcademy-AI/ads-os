@@ -3,6 +3,7 @@ import { requireUser, getSession } from '@/lib/session';
 import { db } from '@/lib/db';
 import { saveToken } from '@/lib/ads/token';
 import { listAdAccounts, fbMe } from '@/lib/ads/facebook';
+import { fetchPages, savePages } from '@/lib/ads/pages';
 import { oauthConfig, exchangeCode, exchangeLongLived, closePopupHtml } from '@/lib/ads/facebook-oauth';
 
 export const runtime = 'nodejs';
@@ -82,7 +83,19 @@ export async function GET(req: Request) {
       if (rows[0]) { await saveToken(rows[0].id, long.token); saved++; }
     }
 
-    return html(origin, { ok: true, accounts: saved, expiresIn: long.expiresIn });
+    // Page và token của Page lấy luôn ở đây. Token của Page chỉ xuất hiện trong
+    // /me/accounts — không có endpoint nào lấy lại được sau này bằng user token,
+    // nên bỏ lỡ lúc này là phải bắt người dùng kết nối lại.
+    let pages = 0;
+    try {
+      pages = await savePages(user.id, await fetchPages(long.token));
+    } catch (e) {
+      // Thiếu pages_show_list không được làm hỏng cả kết nối — tài khoản quảng
+      // cáo vẫn dùng được, chỉ "Tự động chạy ads" là chưa chạy được.
+      console.error('[callback] không lấy được Page:', e instanceof Error ? e.message : e);
+    }
+
+    return html(origin, { ok: true, accounts: saved, pages, expiresIn: long.expiresIn });
   } catch (e) {
     return html(origin, { ok: false, error: e instanceof Error ? e.message : 'Lỗi không rõ' });
   }

@@ -94,11 +94,36 @@ export const BudgetScheduleParams = z.object({
 });
 
 export const PostTriggerParams = z.object({
+  platform: z.enum(PLATFORMS).default('facebook'),
+  mode: z.enum(['dry_run', 'live']).default('dry_run'),
+  /** Page nguồn. Rỗng = chưa chọn, cấu hình không làm gì cả. */
+  pageId: z.string().default(''),
+  pageName: z.string().default(''),
   keywords: z.array(z.string().min(1)).default([]),
   matchMode: z.enum(['any', 'all']).default('any'),
-  /** Campaign tạo ra luôn ở trạng thái PAUSED để người chạy duyệt trước. */
+  /** Ngân sách/ngày cho chiến dịch sinh ra, micros. Mặc định 50.000đ. */
+  dailyBudgetMicros: z.number().int().positive().default(50_000_000_000),
+  countries: z.array(z.string().length(2)).min(1).default(['VN']),
+  ageMin: z.number().int().min(13).max(65).default(18),
+  ageMax: z.number().int().min(13).max(65).default(65),
+  /**
+   * Bỏ qua bài cũ hơn ngần này giờ.
+   *
+   * Không có trần này, bật cấu hình lên là Facebook trả về 25 bài gần nhất và
+   * mọi bài khớp từ khoá đều sinh chiến dịch cùng một lúc.
+   */
+  maxPostAgeHours: z.number().int().min(1).max(168).default(24),
+  /** Trần số chiến dịch tạo trong một lượt chạy. */
+  maxPerRun: z.number().int().min(1).max(10).default(2),
+  /**
+   * Chiến dịch tạo ra LUÔN ở trạng thái PAUSED.
+   *
+   * Là literal chứ không phải boolean: không có đường nào trong giao diện hay
+   * API bật được nó thành false. Tắt ads nhầm thì mất doanh thu; BẬT ads nhầm
+   * thì mất tiền, và mất bao nhiêu thì không có trần.
+   */
   createPaused: z.literal(true).default(true),
-});
+}).refine((p) => p.ageMax >= p.ageMin, 'Tuổi tối đa phải lớn hơn hoặc bằng tuổi tối thiểu');
 
 const BY_KIND = {
   metric_sync: MetricSyncParams,

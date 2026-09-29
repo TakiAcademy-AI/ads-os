@@ -8,6 +8,7 @@ import { db } from '../db';
 import { syncAccount } from '../ads/sync';
 import { runAutoPause } from './auto-pause';
 import { runBudgetSchedule } from './budget-schedule';
+import { runPostTrigger } from './post-trigger';
 import { safeParams, type AutomationKind } from '../configs/schema';
 
 export interface ConfigRunResult {
@@ -28,8 +29,8 @@ export interface CronResult {
 /** Cấu hình tới hạn: đang bật, và chưa chạy lần nào hoặc đã quá hạn. */
 async function dueConfigs() {
   const { rows } = await db.query(
-    `SELECT c.id, c.kind, c.name, c.params, c.interval_minutes,
-            c.ad_account_id, a.name AS account_name
+    `SELECT c.id, c.kind, c.name, c.params, c.interval_minutes, c.created_at,
+            c.ad_account_id, a.name AS account_name, a.owner_id
      FROM automation_config c
      JOIN ad_account a ON a.id = c.ad_account_id
      WHERE c.status = 'active'
@@ -79,9 +80,18 @@ export async function runDueConfigs(): Promise<CronResult> {
         message = `xét ${r.evaluated} chiến dịch · ${r.changed} đổi ngân sách · `
           + `${r.failed} lỗi · ${r.unchanged} đã đúng mức · ${r.skipped} đã ghi trước đó`
           + (r.notes.length ? ` · ${r.notes.join('; ')}` : '');
+      } else if (c.kind === 'post_trigger') {
+        const r = await runPostTrigger(
+          c.id, c.ad_account_id, c.owner_id, c.params, new Date(c.created_at),
+        );
+        ok = r.failed === 0;
+        message = `quét ${r.scanned} bài · ${r.matched} khớp từ khoá · `
+          + `${r.created} chiến dịch tạo ra (PAUSED) · ${r.failed} lỗi · `
+          + `${r.skipped} đã xử lý trước đó`
+          + (r.notes.length ? ` · ${r.notes.join('; ')}` : '');
       } else {
-        // post_trigger chưa có lớp thực thi. Ghi rõ thay vì lặng lẽ đánh dấu đã
-        // chạy — nếu không người dùng tưởng nó đang chạy.
+        // Ghi rõ thay vì lặng lẽ đánh dấu đã chạy — nếu không người dùng tưởng
+        // cấu hình đang hoạt động.
         message = `Loại "${c.kind}" chưa được hỗ trợ thực thi`;
       }
     } catch (e) {
