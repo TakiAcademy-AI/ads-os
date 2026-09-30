@@ -98,8 +98,29 @@ export async function POST(req: Request) {
     // dịch KHÔNG kéo theo creative.
     if (e instanceof AdCreateError) await cleanupPartial(token, e.created);
     const step = e instanceof AdCreateError ? ` (hỏng ở bước ${e.step})` : '';
-    return NextResponse.json(
-      { error: `${e instanceof Error ? e.message : 'Lỗi không rõ'}${step}` }, { status: 502 },
-    );
+    const msg = `${e instanceof Error ? e.message : 'Lỗi không rõ'}${step}`;
+
+    // GHI CẢ LẦN THẤT BẠI. Trước đây chỉ ghi khi thành công, nên một lần bấm
+    // Tạo bị nền tảng từ chối không để lại dấu vết nào — trong khi đó mới đúng
+    // là lúc người dùng cần tra lại "tôi đã định làm gì, và vì sao hỏng".
+    //
+    // Khoá idempotency kèm dấu thời gian: hai lần thử cùng một bài là hai sự
+    // kiện khác nhau, không phải một lần trùng lặp cần chặn.
+    await db.query(
+      `INSERT INTO ad_mutation
+         (ad_account_id, target_external_id, target_name, operation, mode, status,
+          before_value, after_value, reason, error_message, idempotency_key, source)
+       VALUES ($1,$2,$3,'campaign_create','live','failed',
+               'chưa có chiến dịch', 'không tạo được', $4, $5, $6, 'manual')
+       ON CONFLICT (ad_account_id, idempotency_key) DO NOTHING`,
+      [
+        b.adAccountId, b.postId, b.campaignName,
+        `Tạo tay từ bài ${b.postId}, mẫu "${tpl.name}"`,
+        msg,
+        `manual-fail:${b.postId}:${Date.now()}`,
+      ],
+    ).catch(() => {});
+
+    return NextResponse.json({ error: msg }, { status: 502 });
   }
 }
