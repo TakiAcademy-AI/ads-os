@@ -300,6 +300,29 @@ export function NewConfigModal({
           <div style={{ padding: '20px 22px', overflowY: 'auto' }}>
             {error && <div className="err" style={{ marginBottom: 14 }}>{error}</div>}
 
+            {/* Loại được chọn sẵn là 'Kéo chỉ số'. Không nhắc lại ở đây thì người
+                dùng muốn tạo quảng cáo nhưng quên bấm cột trái sẽ lặng lẽ tạo ra
+                một cấu hình chỉ đồng bộ số liệu — đã xảy ra thật. */}
+            <div style={{
+              background: 'var(--acc-soft)', borderRadius: 'var(--r-sm)',
+              padding: '11px 14px', marginBottom: 18, lineHeight: 1.5,
+            }}>
+              <div style={{ fontSize: 11, letterSpacing: .5, textTransform: 'uppercase',
+                            color: 'var(--dim)', marginBottom: 2 }}>
+                {editing ? 'Đang sửa' : 'Đang tạo'}
+              </div>
+              <div style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--acc-ink)' }}>
+                {KIND_LABEL[kind]}
+              </div>
+              <div style={{ fontSize: 12.5, color: 'var(--ink-2)', marginTop: 2 }}>
+                {KIND_DESC[kind]}
+                {kind === 'metric_sync' && (
+                  <> — <b>loại này không tạo quảng cáo nào</b>. Muốn tạo quảng cáo
+                  thì chọn <b>Tự động chạy ads</b> ở cột trái.</>
+                )}
+              </div>
+            </div>
+
             <Section title="Nền tảng"
                      hint={kind === 'post_trigger'
                        ? 'Chỉ Facebook — tính năng này bám vào bài viết trên Fanpage, Google Ads không có khái niệm tương đương.'
@@ -668,7 +691,8 @@ export function NewConfigModal({
               {editing
                 ? <>Thay đổi có hiệu lực từ <b>lượt chạy tiếp theo</b>. Trạng thái bật/tắt
                    và chế độ chạy thử/ghi thật giữ nguyên như hiện tại.</>
-                : <>Cấu hình tạo ra ở trạng thái <b>nháp</b> — chưa chạy. Bật ở danh sách khi bạn sẵn sàng.</>}
+                : <>Cấu hình tạo ra ở trạng thái <b>nháp</b> và <b>sẽ KHÔNG chạy</b> cho
+                   tới khi bạn bấm <b>Bật</b> ở danh sách.</>}
             </div>
           </div>
         </div>

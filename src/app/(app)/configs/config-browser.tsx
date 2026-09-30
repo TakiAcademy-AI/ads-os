@@ -9,7 +9,7 @@ import { NewConfigModal, type EditingConfig } from './new-config-modal';
 const STATUS: Record<string, { cls: string; label: string }> = {
   active: { cls: 'tag-ok', label: 'Đang chạy' },
   paused: { cls: 'tag-hold', label: 'Tạm dừng' },
-  draft: { cls: 'tag-mute', label: 'Nháp' },
+  draft: { cls: 'tag-hold', label: 'Nháp — chưa chạy' },
 };
 
 /** Loại có thể ghi lên tài khoản quảng cáo. metric_sync chỉ đọc. */
@@ -200,6 +200,21 @@ export function ConfigBrowser({
         </div>
 
         {error && <div className="err" style={{ margin: '14px 18px 0' }}>{error}</div>}
+
+        {/* Nháp KHÔNG chạy. Ghi chú trong modal nằm cuối một form dài nên người
+            dùng tạo xong rồi ngồi đợi mãi không thấy gì xảy ra. */}
+        {shown.some((c) => c.status === 'draft') && (
+          <div style={{
+            background: 'var(--amb-soft)', color: 'var(--amb)', fontSize: 12.5,
+            padding: '11px 14px', borderRadius: 'var(--r)', margin: '14px 18px 0',
+            lineHeight: 1.55,
+          }}>
+            <b>{shown.filter((c) => c.status === 'draft').length} cấu hình đang ở trạng
+            thái Nháp và chưa chạy lần nào.</b>{' '}
+            Bấm <b>Bật</b> ở cột Thao tác để bắt đầu. Cấu hình mới luôn tạo ra ở dạng
+            nháp để bạn xem lại trước.
+          </div>
+        )}
 
         {shown.length === 0 ? (
           <div className="empty">
