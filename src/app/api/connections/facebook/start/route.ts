@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { randomBytes } from 'node:crypto';
+import { publicOrigin } from '@/lib/public-origin';
 import { requireWriter, getSession } from '@/lib/session';
 import { oauthConfig, authorizeUrl } from '@/lib/ads/facebook-oauth';
 
@@ -10,7 +11,9 @@ export async function GET(req: Request) {
   // quảng cáo vào hệ thống, nên viewer không được phép.
   await requireWriter();
 
-  const origin = new URL(req.url).origin;
+  // publicOrigin chứ KHÔNG phải new URL(req.url).origin — sau nginx thì req.url
+  // là localhost:3100 và redirect_uri gửi lên nền tảng sẽ sai.
+  const origin = publicOrigin(req);
   const cfg = oauthConfig(origin);
   if (!cfg) {
     return NextResponse.json(

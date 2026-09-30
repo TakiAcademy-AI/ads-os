@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { requireWriter, getSession } from '@/lib/session';
 import { db } from '@/lib/db';
+import { publicOrigin } from '@/lib/public-origin';
 import { saveToken } from '@/lib/ads/token';
 import { listAdAccounts } from '@/lib/ads/google';
 import {
@@ -27,7 +28,12 @@ export async function GET(req: Request) {
   // GET nhưng CÓ tác dụng phụ — xem ghi chú ở route start.
   const user = await requireWriter();
   const url = new URL(req.url);
-  const origin = url.origin;
+  // Phải là địa chỉ CÔNG KHAI, không phải url.origin (= localhost:3100 sau
+  // nginx). Dùng cho hai việc, cả hai đều hỏng lặng lẽ nếu sai:
+  //   1. dựng lại redirect_uri để đổi code — phải TRÙNG chuỗi lúc xin quyền
+  //   2. targetOrigin của postMessage — sai thì popup báo xong mà trang cha
+  //      không nhận được gì
+  const origin = publicOrigin(req);
 
   const denied = url.searchParams.get('error');
   if (denied) {
