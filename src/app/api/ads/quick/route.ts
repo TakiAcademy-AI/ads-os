@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireUser } from '@/lib/session';
+import { requireWriter } from '@/lib/session';
 import { db } from '@/lib/db';
 import { readToken } from '@/lib/ads/token';
 import { getTemplate } from '@/lib/queries/templates';
@@ -23,7 +23,7 @@ const Body = z.object({
 });
 
 export async function POST(req: Request) {
-  const user = await requireUser();
+  const user = await requireWriter();
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: 'Dữ liệu không hợp lệ' }, { status: 400 });

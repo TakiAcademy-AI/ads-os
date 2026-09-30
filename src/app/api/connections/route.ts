@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireUser } from '@/lib/session';
+import { requireWriter } from '@/lib/session';
 import { db } from '@/lib/db';
 import { saveToken } from '@/lib/ads/token';
 import { listAdAccounts, FacebookError } from '@/lib/ads/facebook';
@@ -12,7 +12,7 @@ const Probe = z.object({ token: z.string().min(20) });
 
 /** Kiểm tra token và liệt kê tài khoản QC mà nó truy cập được. */
 export async function POST(req: Request) {
-  await requireUser();
+  await requireWriter();
   const parsed = Probe.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Thiếu token' }, { status: 400 });
 
@@ -45,7 +45,7 @@ const Save = z.object({
 
 /** Lưu tài khoản + token đã mã hoá. */
 export async function PUT(req: Request) {
-  const user = await requireUser();
+  const user = await requireWriter();
   const parsed = Save.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Dữ liệu không hợp lệ' }, { status: 400 });
   const d = parsed.data;

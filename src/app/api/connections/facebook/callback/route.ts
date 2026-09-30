@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import { requireUser, getSession } from '@/lib/session';
+import { requireWriter, getSession } from '@/lib/session';
 import { db } from '@/lib/db';
 import { saveToken } from '@/lib/ads/token';
 import { listAdAccounts, fbMe } from '@/lib/ads/facebook';
@@ -23,7 +23,8 @@ function sameState(a: string, b: string): boolean {
 }
 
 export async function GET(req: Request) {
-  const user = await requireUser();
+  // GET nhưng CÓ tác dụng phụ — xem ghi chú ở route start.
+  const user = await requireWriter();
   const url = new URL(req.url);
   const origin = url.origin;
 

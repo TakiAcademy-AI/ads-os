@@ -1,4 +1,4 @@
-import { requireUser } from '@/lib/session';
+import { requireUser, requireWriter } from '@/lib/session';
 import { listPages, fetchPages, savePages } from '@/lib/ads/pages';
 import { readToken } from '@/lib/ads/token';
 import { db } from '@/lib/db';
@@ -18,7 +18,7 @@ export async function GET() {
  * fb_page chỉ được ghi lúc kết nối, không tự biết Page mới xuất hiện.
  */
 export async function POST() {
-  const user = await requireUser();
+  const user = await requireWriter();
 
   const { rows } = await db.query(
     `SELECT id FROM ad_account

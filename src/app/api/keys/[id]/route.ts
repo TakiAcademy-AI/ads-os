@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireUser } from '@/lib/session';
+import { requireWriter } from '@/lib/session';
 import { db } from '@/lib/db';
 
 export const runtime = 'nodejs';
@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
  * hồi không đăng nhập lại được, đó mới là điều quan trọng.
  */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
+  const user = await requireWriter();
   const { id } = await ctx.params;
 
   const { rowCount } = await db.query(

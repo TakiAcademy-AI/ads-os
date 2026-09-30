@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireUser } from '@/lib/session';
+import { requireUser, requireWriter } from '@/lib/session';
 import { listTemplates, createTemplate } from '@/lib/queries/templates';
 
 export const runtime = 'nodejs';
@@ -19,7 +19,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const user = await requireUser();
+  const user = await requireWriter();
   const parsed = TemplateBody.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json(

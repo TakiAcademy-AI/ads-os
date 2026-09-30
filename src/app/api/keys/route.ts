@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireUser } from '@/lib/session';
+import { requireWriter } from '@/lib/session';
 import { db } from '@/lib/db';
 import { generateKey } from '@/lib/mcp/auth';
 
@@ -16,7 +16,7 @@ const Body = z.object({ name: z.string().min(1).max(80) });
  * với người dùng không phải lập trình viên thì đó là rào chắn tuyệt đối.
  */
 export async function POST(req: Request) {
-  const user = await requireUser();
+  const user = await requireWriter();
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: 'Tên key không hợp lệ' }, { status: 400 });

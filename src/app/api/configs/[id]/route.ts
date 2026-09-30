@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireUser } from '@/lib/session';
+import { requireWriter } from '@/lib/session';
 import {
   setConfigStatus, setConfigMode, deleteConfig, updateConfig, getConfig,
 } from '@/lib/queries/configs';
@@ -15,7 +15,7 @@ const Patch = z.union([
 ]);
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
+  const user = await requireWriter();
   const { id } = await ctx.params;
   const parsed = Patch.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
@@ -60,7 +60,7 @@ const Put = z.object({
  * loại này vào cấu hình loại khác.
  */
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
+  const user = await requireWriter();
   const { id } = await ctx.params;
   const parsed = Put.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
@@ -87,7 +87,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
+  const user = await requireWriter();
   const { id } = await ctx.params;
   const ok = await deleteConfig(user.id, id);
   if (!ok) return NextResponse.json({ error: 'Không tìm thấy cấu hình' }, { status: 404 });

@@ -37,11 +37,13 @@ export async function getSession() {
   return getIronSession<SessionData>(await cookies(), sessionOptions);
 }
 
+export type Role = 'admin' | 'member' | 'viewer';
+
 export interface CurrentUser {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'member' | 'viewer';
+  role: Role;
 }
 
 /** Dùng trong server component/route cần đăng nhập. Chưa đăng nhập → /login. */
@@ -49,11 +51,14 @@ export async function requireUser(): Promise<CurrentUser> {
   const session = await getSession();
   if (!session.userId) redirect('/login');
 
-  const { rows } = await db.query<CurrentUser>(
-    `SELECT id, email, name, role FROM app_user WHERE id = $1`,
+  const { rows } = await db.query<CurrentUser & { disabled_at: Date | null }>(
+    `SELECT id, email, name, role, disabled_at FROM app_user WHERE id = $1`,
     [session.userId],
   );
   const user = rows[0];
+  // Tài khoản bị khoá phải mất quyền NGAY, không chờ cookie hết hạn. Kiểm ở
+  // đây vì mọi trang và mọi route đều đi qua requireUser().
+  if (user?.disabled_at) redirect('/login?disabled=1');
   // Tài khoản bị xoá nhưng cookie còn (vd sau khi tạo lại database).
   //
   // KHÔNG gọi session.destroy() ở đây: requireUser() chạy trong Server
@@ -62,5 +67,43 @@ export async function requireUser(): Promise<CurrentUser> {
   // Cookie cũ để nguyên thì vô hại: nó chỉ tra không ra người dùng, và lần
   // đăng nhập sau sẽ ghi đè. Muốn xoá hẳn thì gọi POST /api/auth/logout.
   if (!user) redirect('/login');
+  return { id: user.id, email: user.email, name: user.name, role: user.role };
+}
+
+/**
+ * Bắt buộc quyền GHI. viewer bị từ chối.
+ *
+ * Cột role có từ migration 001 nhưng TRƯỚC ĐÂY KHÔNG ĐƯỢC KIỂM Ở ĐÂU CẢ —
+ * 'viewer' xoá được cấu hình, ngắt được kết nối, tạo được quảng cáo. Enum chỉ
+ * là trang trí. Mọi route có tác dụng phụ phải gọi hàm này thay cho requireUser.
+ */
+export async function requireWriter(): Promise<CurrentUser> {
+  const user = await requireUser();
+  if (user.role === 'viewer') {
+    throw new ForbiddenError('Tài khoản chỉ có quyền xem, không thực hiện được thao tác này');
+  }
   return user;
+}
+
+/** Bắt buộc quyền quản trị. Dùng cho quản lý người dùng. */
+export async function requireAdmin(): Promise<CurrentUser> {
+  const user = await requireUser();
+  if (user.role !== 'admin') {
+    throw new ForbiddenError('Chỉ quản trị viên mới làm được việc này');
+  }
+  return user;
+}
+
+/**
+ * Lỗi thiếu quyền.
+ *
+ * Ném lỗi chứ không redirect: redirect trong route handler sẽ biến 403 thành
+ * 307 và client không phân biệt được "chưa đăng nhập" với "không đủ quyền".
+ * Bọc bằng withGuard() ở lib/auth/guard.ts để thành phản hồi 403 tử tế.
+ */
+export class ForbiddenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ForbiddenError';
+  }
 }

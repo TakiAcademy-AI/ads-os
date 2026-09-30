@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { randomBytes } from 'node:crypto';
-import { requireUser, getSession } from '@/lib/session';
+import { requireWriter, getSession } from '@/lib/session';
 import { googleOauthConfig, developerToken, authUrl } from '@/lib/ads/google-oauth';
 
 export const runtime = 'nodejs';
 
 export async function GET(req: Request) {
-  await requireUser();
+  // GET nhưng CÓ tác dụng phụ: luồng này kết thúc bằng việc thêm tài khoản
+  // quảng cáo vào hệ thống, nên viewer không được phép.
+  await requireWriter();
 
   const origin = new URL(req.url).origin;
   const cfg = googleOauthConfig(origin);

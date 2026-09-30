@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { requireUser } from '@/lib/session';
+import { requireWriter } from '@/lib/session';
 import { updateTemplate, deleteTemplate, templateUsage } from '@/lib/queries/templates';
 import { TemplateBody } from '../route';
 
 export const runtime = 'nodejs';
 
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
+  const user = await requireWriter();
   const { id } = await ctx.params;
   const parsed = TemplateBody.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
@@ -20,7 +20,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
+  const user = await requireWriter();
   const { id } = await ctx.params;
 
   // Xoá mẫu không làm cấu hình nào chết — chúng quay về tham số khai sẵn — nhưng

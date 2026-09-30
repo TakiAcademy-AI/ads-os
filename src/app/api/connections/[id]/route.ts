@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireUser } from '@/lib/session';
+import { requireWriter } from '@/lib/session';
 import { db } from '@/lib/db';
 
 const Patch = z.object({ status: z.enum(['active', 'disconnected']) });
 
 /** Bật/ngắt một tài khoản đã kết nối. */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
+  const user = await requireWriter();
   const { id } = await ctx.params;
   const parsed = Patch.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Trạng thái không hợp lệ' }, { status: 400 });
@@ -23,7 +23,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
 /** Ngắt kết nối và xoá token. Giữ lại số liệu đã kéo về. */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
+  const user = await requireWriter();
   const { id } = await ctx.params;
   const { rowCount } = await db.query(
     `UPDATE ad_account
