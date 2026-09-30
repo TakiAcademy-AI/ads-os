@@ -73,11 +73,30 @@ async function post<T>(
     body: new URLSearchParams(payload).toString(),
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
-  const json = (await res.json().catch(() => ({}))) as { id?: string; error?: { message?: string; error_user_msg?: string } };
-  // Ở chế độ kiểm thử, Facebook trả 200 mà không có id — đó là thành công.
+  const json = (await res.json().catch(() => ({}))) as {
+    id?: string;
+    error?: {
+      message?: string; error_user_msg?: string; error_user_title?: string;
+      code?: number; error_subcode?: number;
+    };
+  };
+
+  // BẪY: Facebook trả HTTP 200 kèm khối `error` cho một số lỗi tài khoản —
+  // ví dụ code 31 / subcode 3858385 "tài khoản cần xác thực". Chỉ kiểm res.ok
+  // là bỏ lọt hoàn toàn, và nút "Kiểm tra trước" sẽ báo hợp lệ trong khi
+  // Facebook đang từ chối. Vì vậy PHẢI kiểm khối error trước tiên, bất kể mã
+  // trạng thái HTTP.
+  if (json.error) {
+    const e = json.error;
+    const title = e.error_user_title ? `${e.error_user_title}: ` : '';
+    const code = e.code ? ` [mã ${e.code}${e.error_subcode ? `/${e.error_subcode}` : ''}]` : '';
+    throw new AdCreateError(
+      `${title}${e.error_user_msg || e.message || `HTTP ${res.status}`}${code}`, step, created,
+    );
+  }
+  // Ở chế độ kiểm thử, Facebook trả 200 không có id — đó mới là thành công.
   if (!res.ok || (!validateOnly && !json.id)) {
-    const e = json.error ?? {};
-    throw new AdCreateError(e.error_user_msg || e.message || `HTTP ${res.status}`, step, created);
+    throw new AdCreateError(`Facebook trả HTTP ${res.status} không kèm id`, step, created);
   }
   return json as T;
 }

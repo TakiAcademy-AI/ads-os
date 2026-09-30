@@ -40,7 +40,9 @@ async function write(path: string, body: Record<string, string>, token: string):
   });
 
   const json = (await res.json().catch(() => ({}))) as { error?: GraphErr };
-  if (!res.ok) {
+  // Cùng bẫy với facebook-create.ts: Facebook trả HTTP 200 kèm khối error cho
+  // một số lỗi tài khoản. Chỉ kiểm res.ok là coi thất bại thành công.
+  if (!res.ok || json.error) {
     const e = json.error ?? {};
     // 200/10 = thiếu quyền; 190 = token hỏng; 100 = tham số sai.
     const isPermission = e.code === 200 || e.code === 10 || e.code === 190;
