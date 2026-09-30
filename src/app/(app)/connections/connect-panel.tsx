@@ -17,9 +17,14 @@ const inputStyle: React.CSSProperties = {
   background: 'var(--card)', color: 'var(--ink)',
 };
 
-export function ConnectPanel({ oauthReady }: { oauthReady: boolean }) {
+export function ConnectPanel({ oauthReady, googleReady, googleDevToken }: {
+  oauthReady: boolean;
+  googleReady: boolean;
+  /** Đã có GOOGLE_ADS_DEVELOPER_TOKEN chưa — thiếu thì Google Ads API từ chối mọi lời gọi. */
+  googleDevToken: boolean;
+}) {
   const router = useRouter();
-  const [mode, setMode] = useState<'oauth' | 'token'>(oauthReady ? 'oauth' : 'token');
+  const [mode, setMode] = useState<'oauth' | 'google' | 'token'>(oauthReady ? 'oauth' : 'token');
   const [token, setToken] = useState('');
   const [found, setFound] = useState<Found[] | null>(null);
   const [error, setError] = useState('');
@@ -33,11 +38,19 @@ export function ConnectPanel({ oauthReady }: { oauthReady: boolean }) {
   useEffect(() => {
     function onMessage(e: MessageEvent) {
       if (e.origin !== window.location.origin) return;
-      const d = e.data as { ok?: boolean; accounts?: number; error?: string };
+      const d = e.data as {
+        ok?: boolean; accounts?: number; error?: string; pages?: number; managers?: number;
+      };
       if (typeof d?.ok !== 'boolean') return;
       setBusy(false);
       if (d.ok) {
-        setInfo(`Đã lấy được ${d.accounts} tài khoản. Chọn tài khoản muốn dùng ở bảng dưới.`);
+        setInfo(
+          `Đã lấy được ${d.accounts} tài khoản. Chọn tài khoản muốn dùng ở bảng dưới.`
+          + (d.pages ? ` Kèm ${d.pages} Page.` : '')
+          // MCC không chạy quảng cáo trực tiếp nên bị bỏ qua — nói ra để người
+          // dùng không thắc mắc vì sao thiếu mất vài tài khoản.
+          + (d.managers ? ` Bỏ qua ${d.managers} tài khoản quản lý (MCC).` : ''),
+        );
         setError('');
         router.refresh();
       } else {
@@ -48,13 +61,13 @@ export function ConnectPanel({ oauthReady }: { oauthReady: boolean }) {
     return () => window.removeEventListener('message', onMessage);
   }, [router]);
 
-  function startOauth() {
+  function startOauth(platform: 'facebook' | 'google' = 'facebook') {
     setBusy(true); setError(''); setInfo('');
     const w = 620, h = 720;
     const left = window.screenX + (window.outerWidth - w) / 2;
     const top = window.screenY + (window.outerHeight - h) / 2;
     popup.current = window.open(
-      '/api/connections/facebook/start', 'fb-oauth',
+      `/api/connections/${platform}/start`, `${platform}-oauth`,
       `width=${w},height=${h},left=${left},top=${top}`,
     );
     if (!popup.current) {
@@ -114,18 +127,23 @@ export function ConnectPanel({ oauthReady }: { oauthReady: boolean }) {
 
         <div style={{ display: 'flex', gap: 4, background: 'var(--side)', padding: 4,
                       borderRadius: 'var(--r-sm)', marginBottom: 16, width: 'fit-content' }}>
-          {([['oauth', 'Đăng nhập Facebook'], ['token', 'Dán token thủ công']] as const).map(([m, label]) => (
-            <button key={m} onClick={() => setMode(m)}
-                    disabled={m === 'oauth' && !oauthReady}
+          {([
+            ['oauth', 'Facebook', oauthReady],
+            ['google', 'Google Ads', googleReady],
+            ['token', 'Dán token thủ công', true],
+          ] as const).map(([m, label, ready]) => (
+            <button key={m} onClick={() => ready && setMode(m)}
+                    disabled={!ready}
                     style={{
                       padding: '7px 15px', fontSize: 13, fontWeight: 500, fontFamily: 'inherit',
                       border: 0, borderRadius: 6,
-                      cursor: m === 'oauth' && !oauthReady ? 'not-allowed' : 'pointer',
+                      cursor: ready ? 'pointer' : 'not-allowed',
                       background: mode === m ? 'var(--card)' : 'transparent',
                       color: mode === m ? 'var(--ink)' : 'var(--dim)',
-                      opacity: m === 'oauth' && !oauthReady ? .5 : 1,
+                      opacity: ready ? 1 : .5,
                     }}>
               {label}
+              {!ready && <span style={{ fontSize: 9, marginLeft: 5 }}>CHƯA CẤU HÌNH</span>}
             </button>
           ))}
         </div>
@@ -142,7 +160,7 @@ export function ConnectPanel({ oauthReady }: { oauthReady: boolean }) {
               </div>
             ) : (
               <>
-                <button className="btn" onClick={startOauth} disabled={busy}
+                <button className="btn" onClick={() => startOauth('facebook')} disabled={busy}
                         style={{ background: '#1877F2', fontSize: 14, padding: '11px 20px' }}>
                   {busy ? 'Đang chờ cửa sổ Facebook…' : 'Đăng nhập bằng Facebook'}
                 </button>
@@ -157,6 +175,45 @@ export function ConnectPanel({ oauthReady }: { oauthReady: boolean }) {
                   bật &ldquo;ghi thật&rdquo; trên từng cấu hình thì bot mới được hành động, và vẫn
                   bị chặn bởi trần thiệt hại cùng danh sách chiến dịch được bảo vệ.
                   Token nhận về có hạn 60 ngày, hết hạn thì nối lại.
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {mode === 'google' && (
+          <>
+            {!googleReady ? (
+              <div style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                Chưa cấu hình app Google. Thêm <span className="mono">GOOGLE_ADS_CLIENT_ID</span>,{' '}
+                <span className="mono">GOOGLE_ADS_CLIENT_SECRET</span> và{' '}
+                <span className="mono">GOOGLE_ADS_DEVELOPER_TOKEN</span> vào{' '}
+                <span className="mono">.env</span>, và khai redirect URI{' '}
+                <span className="mono">
+                  {typeof window !== 'undefined' ? window.location.origin : ''}/api/connections/google/callback
+                </span>{' '}
+                trong Google Cloud Console.
+              </div>
+            ) : (
+              <>
+                {!googleDevToken && (
+                  <div className="err" style={{ marginBottom: 12 }}>
+                    Thiếu <span className="mono">GOOGLE_ADS_DEVELOPER_TOKEN</span>. Đăng nhập
+                    vẫn chạy nhưng Google Ads API sẽ từ chối mọi lời gọi sau đó.
+                  </div>
+                )}
+                <button className="btn" onClick={() => startOauth('google')} disabled={busy}
+                        style={{ background: '#1A73E8', fontSize: 14, padding: '11px 20px' }}>
+                  {busy ? 'Đang chờ cửa sổ Google…' : 'Đăng nhập bằng Google'}
+                </button>
+                <div className="note" style={{ maxWidth: 'none', marginTop: 10 }}>
+                  Ads OS xin đúng một quyền:{' '}
+                  <span className="mono">https://www.googleapis.com/auth/adwords</span>.
+                  <br /><br />
+                  <b>Khác Facebook ở hai điểm.</b> Kết nối Google <b>không hết hạn sau 60
+                  ngày</b> — Google cấp refresh token sống vĩnh viễn, chỉ mất khi bạn tự
+                  thu hồi quyền. Và tài khoản <b>quản lý (MCC) sẽ bị bỏ qua</b>: chúng
+                  không chạy quảng cáo trực tiếp nên đồng bộ về cũng không có số liệu.
                 </div>
               </>
             )}

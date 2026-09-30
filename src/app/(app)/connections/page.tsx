@@ -2,11 +2,16 @@ import { requireUser } from '@/lib/session';
 import { db } from '@/lib/db';
 import { dateTime } from '@/lib/format';
 import { oauthConfig } from '@/lib/ads/facebook-oauth';
+import { googleOauthConfig, developerToken } from '@/lib/ads/google-oauth';
 import { ConnectPanel } from './connect-panel';
 import { AccountActions } from './account-actions';
 import { SyncButton } from './sync-button';
 
 export const dynamic = 'force-dynamic';
+
+const PLATFORM_LABEL: Record<string, string> = {
+  facebook: 'Facebook', google: 'Google Ads', tiktok: 'TikTok',
+};
 
 const STATUS: Record<string, { cls: string; label: string }> = {
   active: { cls: 'tag-ok', label: 'Đang hoạt động' },
@@ -42,7 +47,11 @@ export default async function ConnectionsPage() {
         </div>
       </div>
 
-      <ConnectPanel oauthReady={oauthConfig('http://x') !== null} />
+      <ConnectPanel
+        oauthReady={oauthConfig('http://x') !== null}
+        googleReady={googleOauthConfig('http://x') !== null}
+        googleDevToken={developerToken() !== ''}
+      />
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-head">
@@ -68,7 +77,13 @@ export default async function ConnectionsPage() {
                 return (
                   <tr key={a.id}>
                     <td>
-                      <div className="cell-title">{a.name}</div>
+                      <div className="cell-title">
+                        {a.name}
+                        {' '}
+                        <span className="tag tag-mute" style={{ fontSize: 10 }}>
+                          {PLATFORM_LABEL[a.platform] ?? a.platform}
+                        </span>
+                      </div>
                       <div className="cell-sub mono">
                         {a.external_id} · {a.currency}{a.timezone ? ` · ${a.timezone}` : ''}
                       </div>

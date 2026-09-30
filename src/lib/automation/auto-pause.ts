@@ -1,13 +1,17 @@
 // Đánh giá chiến dịch theo ngưỡng CPA, ghi nhật ký, và tắt thật nếu được phép.
 //
-// Ở chế độ 'dry_run' (mặc định) chỉ ghi đề xuất, không chạm vào Facebook.
+// Ở chế độ 'dry_run' (mặc định) chỉ ghi đề xuất, không chạm vào nền tảng nào.
+// Lệnh ghi đi qua lib/ads/platform.ts nên lớp này không cần biết Facebook hay
+// Google.
 // Chỉ khi cấu hình đặt mode='live' mới gọi lệnh ghi — và vẫn phải qua đủ bốn
 // guard trước đó. Quyền ads_management là điều kiện CẦN, không phải điều kiện ĐỦ.
 
 import { db } from '../db';
 import { todayVn } from '../account';
 import { readToken } from '../ads/token';
-import { setCampaignStatus, readCampaignStatus, FacebookWriteError } from '../ads/facebook-write';
+import {
+  pauseCampaign, readCampaignStatus, PlatformWriteError,
+} from '../ads/platform';
 import { listCampaigns, type CampaignRow } from '../queries/ads';
 import { getPauseConfig } from '../queries/configs';
 import { safeParams } from '../configs/schema';
@@ -61,7 +65,14 @@ export async function runAutoPause(
   const protectedIds = new Set(cfg.params.protectedCampaignIds);
 
   // Chỉ xét chiến dịch đang chạy. Chiến dịch đã tắt thì đề xuất tắt là vô nghĩa.
-  const running = campaigns.filter((c) => c.status.toUpperCase() === 'ACTIVE');
+  //
+  // Hai nền tảng gọi trạng thái này bằng hai tên khác nhau: Facebook là ACTIVE,
+  // Google là ENABLED. Chỉ so với 'ACTIVE' thì MỌI chiến dịch Google đều bị bỏ
+  // qua và cấu hình tắt ads im lặng không làm gì cả.
+  const running = campaigns.filter((c) => {
+    const st = c.status.toUpperCase();
+    return st === 'ACTIVE' || st === 'ENABLED';
+  });
   out.evaluated = running.length;
 
   let pausesThisRun = 0;
@@ -145,12 +156,12 @@ export async function runAutoPause(
     }
 
     try {
-      await setCampaignStatus(token, c.externalId, 'PAUSED');
+      await pauseCampaign(adAccountId, c.externalId);
 
-      // Không tin response — đọc lại trạng thái từ Facebook để xác nhận.
-      const after = await readCampaignStatus(token, c.externalId);
+      // Không tin response — đọc lại trạng thái từ nền tảng để xác nhận.
+      const after = await readCampaignStatus(adAccountId, c.externalId);
       if (after && after.toUpperCase() !== 'PAUSED') {
-        await fail(mutationId, `Đã gọi lệnh tắt nhưng Facebook vẫn báo trạng thái "${after}"`);
+        await fail(mutationId, `Đã gọi lệnh tắt nhưng nền tảng vẫn báo trạng thái "${after}"`);
         out.failed++;
         continue;
       }
@@ -163,7 +174,7 @@ export async function runAutoPause(
       );
       out.applied++;
     } catch (e) {
-      const msg = e instanceof FacebookWriteError
+      const msg = e instanceof PlatformWriteError
         ? `${e.message}${e.isPermission ? ' (thiếu quyền hoặc token hỏng — cần kết nối lại)' : ''}`
         : e instanceof Error ? e.message : String(e);
       await fail(mutationId, msg);

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireUser } from '@/lib/session';
 import { db } from '@/lib/db';
-import { syncAccount } from '@/lib/ads/sync';
+import { syncAnyAccount } from '@/lib/ads/sync-any';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   );
   const p = (cfg[0]?.params ?? {}) as Record<string, unknown>;
 
-  const result = await syncAccount(parsed.data.adAccountId, {
+  const result = await syncAnyAccount(parsed.data.adAccountId, {
     lookbackDays: parsed.data.lookbackDays ?? (typeof p.lookbackDays === 'number' ? p.lookbackDays : 30),
     level: (p.level as 'campaign' | 'adset' | 'ad') ?? 'campaign',
     extraFields: Array.isArray(p.extraFields) ? (p.extraFields as string[]) : [],

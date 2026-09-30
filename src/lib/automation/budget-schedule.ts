@@ -6,7 +6,7 @@
 
 import { db } from '../db';
 import { readToken } from '../ads/token';
-import { setCampaignDailyBudget, readCampaignBudget, FacebookWriteError } from '../ads/facebook-write';
+import { setDailyBudget, readDailyBudget, PlatformWriteError } from '../ads/platform';
 import { safeParams, slotHours } from '../configs/schema';
 
 export interface BudgetRunResult {
@@ -69,7 +69,7 @@ export async function runBudgetSchedule(
   const { rows: camps } = await db.query(
     `SELECT id, external_id, name, daily_budget_micros, base_daily_budget_micros
      FROM ad_campaign
-     WHERE ad_account_id = $1 AND upper(status) = 'ACTIVE'
+     WHERE ad_account_id = $1 AND upper(status) IN ('ACTIVE','ENABLED')
        AND daily_budget_micros IS NOT NULL`,
     [adAccountId],
   );
@@ -125,11 +125,11 @@ export async function runBudgetSchedule(
     if (mode === 'dry_run') { out.changed++; continue; }
 
     try {
-      await setCampaignDailyBudget(token!, c.external_id, target, currency);
+      await setDailyBudget(adAccountId, c.external_id, target);
 
       // Đọc lại để xác nhận — Facebook làm tròn ngân sách theo đơn vị tiền tệ
       // nên giá trị trả về có thể lệch vài đồng so với target.
-      const after = await readCampaignBudget(token!, c.external_id, currency);
+      const after = await readDailyBudget(adAccountId, c.external_id);
       await db.query(
         `UPDATE ad_mutation SET status='applied', applied_at=NOW(), after_value=$2 WHERE id=$1`,
         [mutationId, after === null ? fmt(target, currency) : fmt(after, currency)],
@@ -140,7 +140,7 @@ export async function runBudgetSchedule(
       );
       out.changed++;
     } catch (e) {
-      const msg = e instanceof FacebookWriteError
+      const msg = e instanceof PlatformWriteError
         ? `${e.message}${e.isPermission ? ' (thiếu quyền hoặc token hỏng)' : ''}`
         : e instanceof Error ? e.message : String(e);
       await db.query(

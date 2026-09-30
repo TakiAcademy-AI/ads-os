@@ -5,7 +5,7 @@
 // nhiều instance — timer ngoài tiến trình thì chỉ có một nguồn kích hoạt.
 
 import { db } from '../db';
-import { syncAccount } from '../ads/sync';
+import { syncAnyAccount } from '../ads/sync-any';
 import { runAutoPause } from './auto-pause';
 import { runBudgetSchedule } from './budget-schedule';
 import { runPostTrigger } from './post-trigger';
@@ -55,7 +55,7 @@ export async function runDueConfigs(): Promise<CronResult> {
     try {
       if (c.kind === 'metric_sync') {
         const p = safeParams('metric_sync', c.params);
-        const r = await syncAccount(c.ad_account_id, {
+        const r = await syncAnyAccount(c.ad_account_id, {
           lookbackDays: p.lookbackDays,
           level: p.level,
           extraFields: p.extraFields,

@@ -1,0 +1,318 @@
+// Google Ads API — CHỈ ĐỌC.
+//
+// Lệnh ghi nằm ở google-write.ts, tách riêng như phía Facebook.
+//
+// BA KHÁC BIỆT QUAN TRỌNG SO VỚI FACEBOOK:
+//
+// 1. TIỀN ĐÃ LÀ MICROS SẴN. `metrics.cost_micros` là micros của đúng tiền tệ
+//    tài khoản — trùng khớp đơn vị nội bộ của hệ thống. KHÔNG được đưa qua
+//    spendToMicros: làm vậy là nhân thêm 1.000.000 lần nữa.
+//
+// 2. CHUYỂN ĐỔI LÀ SỐ THẬP PHÂN, và chỉ có MỘT chỉ số duy nhất
+//    (`metrics.conversions`). Không có mớ action_type trùng lặp như Facebook,
+//    nên không có bẫy cộng dồn đếm ba lần.
+//
+// 3. MỌI LỜI GỌI PHẢI KÈM developer-token, và nếu tài khoản nằm dưới một tài
+//    khoản quản lý thì phải kèm cả login-customer-id.
+
+const HOST = 'https://googleads.googleapis.com';
+const VERSION = process.env.GOOGLE_ADS_API_VERSION || 'v21';
+const TIMEOUT_MS = 30_000;
+const MAX_RETRY = 3;
+
+export class GoogleAdsError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+    /** Token hỏng hoặc bị thu hồi — người dùng phải kết nối lại. */
+    readonly isAuthProblem = false,
+  ) {
+    super(message);
+    this.name = 'GoogleAdsError';
+  }
+}
+
+export interface GoogleAuth {
+  accessToken: string;
+  developerToken: string;
+  /** ID tài khoản quản lý, chỉ chữ số. Bỏ trống nếu tài khoản đứng độc lập. */
+  loginCustomerId?: string | null;
+}
+
+function headers(auth: GoogleAuth): Record<string, string> {
+  const h: Record<string, string> = {
+    Authorization: `Bearer ${auth.accessToken}`,
+    'developer-token': auth.developerToken,
+    'Content-Type': 'application/json',
+  };
+  // Thiếu header này khi tài khoản nằm dưới MCC thì Google trả lỗi quyền, và
+  // thông báo lỗi KHÔNG hề nhắc tới header còn thiếu.
+  if (auth.loginCustomerId) h['login-customer-id'] = auth.loginCustomerId.replace(/\D/g, '');
+  return h;
+}
+
+/** Bóc thông điệp lỗi có ích ra khỏi vỏ lỗi nhiều tầng của Google. */
+function extractError(body: unknown, status: number): string {
+  const b = body as {
+    error?: { message?: string; details?: { errors?: { message?: string }[] }[] };
+  } | undefined;
+  const detail = b?.error?.details?.[0]?.errors?.[0]?.message;
+  return detail || b?.error?.message || `Google Ads trả HTTP ${status}`;
+}
+
+async function call<T>(
+  path: string,
+  auth: GoogleAuth,
+  init: { method: 'GET' | 'POST'; body?: unknown },
+): Promise<T> {
+  let lastErr: Error | null = null;
+
+  for (let attempt = 0; attempt < MAX_RETRY; attempt++) {
+    try {
+      const res = await fetch(`${HOST}/${VERSION}${path}`, {
+        method: init.method,
+        headers: headers(auth),
+        body: init.body === undefined ? undefined : JSON.stringify(init.body),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+
+      if (res.ok) return (await res.json()) as T;
+
+      const body = await res.json().catch(() => ({}));
+      const msg = extractError(body, res.status);
+
+      // 401/403 = token hỏng hoặc thiếu quyền; thử lại vô nghĩa.
+      if (res.status === 401 || res.status === 403) {
+        throw new GoogleAdsError(msg, res.status, true);
+      }
+      // 4xx khác cũng là lỗi tham số, không phải lỗi tạm thời.
+      if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+        throw new GoogleAdsError(msg, res.status);
+      }
+      lastErr = new GoogleAdsError(msg, res.status);
+    } catch (e) {
+      if (e instanceof GoogleAdsError && e.status !== undefined && e.status < 500 && e.status !== 429) {
+        throw e;
+      }
+      lastErr = e instanceof Error ? e : new Error(String(e));
+    }
+
+    if (attempt < MAX_RETRY - 1) {
+      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+  throw new GoogleAdsError(
+    `Gọi Google Ads thất bại sau ${MAX_RETRY} lần: ${lastErr?.message ?? 'không rõ'}`,
+  );
+}
+
+/**
+ * Chạy một câu GAQL và trả về mọi dòng.
+ *
+ * searchStream trả về MẢNG các khối, mỗi khối có `results` riêng — không phải
+ * một mảng phẳng. Quên gộp lại là chỉ đọc được khối đầu tiên và mất phần lớn
+ * dữ liệu của tài khoản lớn, một cách lặng lẽ.
+ */
+export async function gaql<T>(
+  auth: GoogleAuth,
+  customerId: string,
+  query: string,
+): Promise<T[]> {
+  const cid = customerId.replace(/\D/g, '');
+  const chunks = await call<{ results?: T[] }[]>(
+    `/customers/${cid}/googleAds:searchStream`,
+    auth,
+    { method: 'POST', body: { query } },
+  );
+  return (Array.isArray(chunks) ? chunks : []).flatMap((c) => c.results ?? []);
+}
+
+// ─── Tài khoản ───────────────────────────────────────────────────────────────
+
+export interface GoogleAdAccount {
+  /** Customer ID, chỉ chữ số. */
+  id: string;
+  name: string;
+  currency: string;
+  timeZone: string;
+  /** true = đây là tài khoản QUẢN LÝ, không chạy quảng cáo trực tiếp. */
+  isManager: boolean;
+  /** MCC cha, nếu tài khoản này được tìm thấy qua một MCC. */
+  loginCustomerId: string | null;
+}
+
+/** Customer ID mà token này truy cập được. Chỉ trả ID, chưa có tên. */
+export async function listAccessibleCustomers(auth: GoogleAuth): Promise<string[]> {
+  const r = await call<{ resourceNames?: string[] }>(
+    '/customers:listAccessibleCustomers', auth, { method: 'GET' },
+  );
+  return (r.resourceNames ?? []).map((n) => n.split('/').pop() ?? '').filter(Boolean);
+}
+
+interface CustomerClientRow {
+  customerClient?: {
+    id?: string;
+    descriptiveName?: string;
+    currencyCode?: string;
+    timeZone?: string;
+    manager?: boolean;
+    status?: string;
+  };
+}
+
+/**
+ * Liệt kê đầy đủ tài khoản, gồm cả tài khoản con nằm dưới mỗi MCC.
+ *
+ * listAccessibleCustomers chỉ trả về những tài khoản token được gắn TRỰC TIẾP.
+ * Người chạy quảng cáo ở Việt Nam thường có một MCC chứa hàng chục tài khoản
+ * con — dừng ở listAccessibleCustomers là chỉ thấy đúng cái MCC, tưởng không
+ * có tài khoản nào chạy được.
+ */
+export async function listAdAccounts(auth: GoogleAuth): Promise<GoogleAdAccount[]> {
+  const roots = await listAccessibleCustomers(auth);
+  const seen = new Map<string, GoogleAdAccount>();
+
+  for (const root of roots) {
+    // Truy vấn customer_client từ gốc trả về cả chính nó lẫn toàn bộ cây con.
+    const rows = await gaql<CustomerClientRow>(
+      { ...auth, loginCustomerId: root },
+      root,
+      `SELECT customer_client.id, customer_client.descriptive_name,
+              customer_client.currency_code, customer_client.time_zone,
+              customer_client.manager, customer_client.status
+       FROM customer_client
+       WHERE customer_client.status = 'ENABLED'`,
+    ).catch(() => [] as CustomerClientRow[]);
+
+    for (const r of rows) {
+      const c = r.customerClient;
+      if (!c?.id) continue;
+      // Tài khoản xuất hiện dưới nhiều MCC thì giữ bản đầu tiên — bản nào cũng
+      // truy cập được, và đổi qua lại chỉ làm rối người dùng.
+      if (seen.has(c.id)) continue;
+      seen.set(c.id, {
+        id: c.id,
+        name: c.descriptiveName || `Tài khoản ${c.id}`,
+        currency: c.currencyCode || 'VND',
+        timeZone: c.timeZone || 'Asia/Ho_Chi_Minh',
+        isManager: c.manager === true,
+        loginCustomerId: c.id === root ? null : root,
+      });
+    }
+  }
+  return [...seen.values()];
+}
+
+// ─── Chiến dịch ──────────────────────────────────────────────────────────────
+
+export interface GoogleCampaign {
+  id: string;
+  name: string;
+  /** ENABLED | PAUSED | REMOVED */
+  status: string;
+  /** SEARCH | DISPLAY | VIDEO | SHOPPING | PERFORMANCE_MAX | DEMAND_GEN… */
+  channelType: string;
+  /** Ngân sách/ngày, micros. null nếu dùng ngân sách chia sẻ không đọc được. */
+  dailyBudgetMicros: number | null;
+  /** Resource name của ngân sách — cần để ĐỔI ngân sách sau này. */
+  budgetResource: string | null;
+  startDate: string | null;
+}
+
+interface CampaignRow {
+  campaign?: {
+    id?: string; name?: string; status?: string;
+    advertisingChannelType?: string; startDate?: string; campaignBudget?: string;
+  };
+  campaignBudget?: { amountMicros?: string; resourceName?: string };
+}
+
+export async function listCampaigns(
+  auth: GoogleAuth, customerId: string,
+): Promise<GoogleCampaign[]> {
+  const rows = await gaql<CampaignRow>(auth, customerId,
+    `SELECT campaign.id, campaign.name, campaign.status,
+            campaign.advertising_channel_type, campaign.start_date,
+            campaign_budget.amount_micros, campaign_budget.resource_name
+     FROM campaign
+     WHERE campaign.status != 'REMOVED'`);
+
+  return rows.filter((r) => r.campaign?.id).map((r) => ({
+    id: r.campaign!.id!,
+    name: r.campaign!.name || `Chiến dịch ${r.campaign!.id}`,
+    status: r.campaign!.status || 'UNKNOWN',
+    channelType: r.campaign!.advertisingChannelType || 'UNKNOWN',
+    // amount_micros ĐÃ là micros — không nhân thêm gì cả.
+    dailyBudgetMicros: r.campaignBudget?.amountMicros
+      ? Number(r.campaignBudget.amountMicros) : null,
+    budgetResource: r.campaignBudget?.resourceName ?? null,
+    startDate: r.campaign!.startDate ?? null,
+  }));
+}
+
+// ─── Số liệu theo ngày ───────────────────────────────────────────────────────
+
+export interface GoogleInsight {
+  campaignId: string;
+  date: string;
+  costMicros: number;
+  impressions: number;
+  clicks: number;
+  /** Số thập phân — Google phân bổ chia phần nên 0.5 chuyển đổi là bình thường. */
+  conversions: number;
+  /** Tỷ lệ 0–1, không phải phần trăm. */
+  ctr: number;
+}
+
+interface MetricRow {
+  campaign?: { id?: string };
+  segments?: { date?: string };
+  metrics?: {
+    costMicros?: string; impressions?: string; clicks?: string;
+    conversions?: number; ctr?: number;
+  };
+}
+
+export async function fetchInsights(
+  auth: GoogleAuth,
+  customerId: string,
+  opts: { since: string; until: string },
+): Promise<GoogleInsight[]> {
+  // segments.date tách sẵn theo ngày — không cần tham số riêng như
+  // time_increment của Facebook. Guard attribution cần số theo từng ngày.
+  const rows = await gaql<MetricRow>(auth, customerId,
+    `SELECT campaign.id, segments.date,
+            metrics.cost_micros, metrics.impressions, metrics.clicks,
+            metrics.conversions, metrics.ctr
+     FROM campaign
+     WHERE segments.date BETWEEN '${opts.since}' AND '${opts.until}'
+       AND campaign.status != 'REMOVED'`);
+
+  return rows.filter((r) => r.campaign?.id && r.segments?.date).map((r) => ({
+    campaignId: r.campaign!.id!,
+    date: r.segments!.date!,
+    costMicros: Number(r.metrics?.costMicros ?? 0),
+    impressions: Number(r.metrics?.impressions ?? 0),
+    clicks: Number(r.metrics?.clicks ?? 0),
+    conversions: Number(r.metrics?.conversions ?? 0),
+    // Google trả tỷ lệ dạng thập phân (0.05 = 5%). Facebook trả phần trăm (5).
+    // Cột ctr của hệ thống lưu dạng thập phân, nên Google dùng thẳng.
+    ctr: Number(r.metrics?.ctr ?? 0),
+  }));
+}
+
+/**
+ * Ánh xạ kênh quảng cáo Google sang mục tiêu nội bộ.
+ *
+ * Đây là phép ÁNH XẠ GẦN ĐÚNG, không phải tương đương. Google phân loại theo
+ * nơi quảng cáo hiển thị; hệ thống này phân loại theo thứ muốn đạt được. Chuỗi
+ * gốc luôn được giữ ở objective_raw để truy lại khi ánh xạ sai.
+ */
+export function mapChannelType(channelType: string): string {
+  const t = channelType.toUpperCase();
+  if (t === 'SEARCH') return 'traffic';
+  if (t === 'SHOPPING' || t === 'PERFORMANCE_MAX') return 'sales';
+  if (t === 'VIDEO') return 'video_views';
+  if (t === 'DISPLAY' || t === 'DEMAND_GEN' || t === 'DISCOVERY') return 'awareness';
+  return 'unknown';
+}

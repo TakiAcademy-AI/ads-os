@@ -55,6 +55,7 @@ const NAV = [
   { id: 'bon-loai', label: 'Bốn loại tự động hoá' },
   { id: 'chay-thu', label: 'Chạy thử trước khi ghi thật' },
   { id: 'bao-ve', label: 'Những lớp chặn an toàn' },
+  { id: 'google', label: 'Google Ads — khác gì Facebook' },
   { id: 'quyen', label: 'Quyền Facebook — làm được gì' },
   { id: 'faq', label: 'Câu hỏi thường gặp' },
 ];
@@ -213,6 +214,55 @@ export default async function GuidePage() {
               các công cụ khác: ở đó thứ không nằm trong danh sách thì bị tắt, nên
               quên một mục là mất chiến dịch. Ở đây danh sách chỉ <i>thêm</i> an toàn —
               bỏ sót không bao giờ dẫn tới tắt nhầm.
+            </div>
+          </Section>
+
+          <Section id="google" title="Google Ads — khác gì Facebook">
+            <p style={{ margin: '0 0 12px' }}>
+              Kéo chỉ số, tắt ads tự động và ngân sách theo giờ đều chạy được với
+              Google Ads. Riêng <b>Tự động chạy ads</b> chỉ có ở Facebook vì nó bám
+              vào bài viết trên Fanpage.
+            </p>
+            <table style={{ width: '100%' }}>
+              <tbody>
+                <tr>
+                  <td style={{ width: 175 }}>Kết nối hết hạn</td>
+                  <td><b>Google không hết hạn.</b> Facebook cấp token 60 ngày phải nối
+                      lại; Google cấp refresh token sống vĩnh viễn, chỉ mất khi bạn tự
+                      thu hồi quyền.</td>
+                </tr>
+                <tr>
+                  <td>Tài khoản quản lý</td>
+                  <td>Tài khoản <b>MCC bị bỏ qua</b> khi kết nối — chúng không chạy
+                      quảng cáo trực tiếp nên không có số liệu để đồng bộ. Tài khoản con
+                      bên dưới vẫn được lấy đủ.</td>
+                </tr>
+                <tr>
+                  <td>Ngân sách dùng chung</td>
+                  <td>Google cho nhiều chiến dịch <b>dùng chung một ngân sách</b>. Đổi
+                      nó là đổi cho tất cả, nên hệ thống <b>từ chối không đụng vào</b> và
+                      ghi lý do vào Nhật ký. Muốn tự động điều chỉnh thì tách ngân sách
+                      riêng cho chiến dịch đó.</td>
+                </tr>
+                <tr>
+                  <td>Chuyển đổi</td>
+                  <td>Google trả <b>số thập phân</b> (0.5 chuyển đổi là bình thường với
+                      mô hình phân bổ chia phần) và gộp mọi loại vào một chỉ số. Facebook
+                      trả số nguyên nhưng tách thành nhiều loại hành động chồng chéo.</td>
+                </tr>
+                <tr>
+                  <td>Trạng thái chiến dịch</td>
+                  <td>Google gọi là <span className="mono">ENABLED</span>, Facebook gọi là{' '}
+                      <span className="mono">ACTIVE</span>. Hệ thống hiểu cả hai.</td>
+                </tr>
+              </tbody>
+            </table>
+            <div className="note" style={{ maxWidth: 'none', marginTop: 12 }}>
+              Google Ads API cần một <b>developer token</b> xin ở tài khoản quản lý,
+              mục API Center. Token mới chỉ có quyền <b>Test</b> — chỉ gọi được tài
+              khoản thử nghiệm. Muốn chạy tài khoản thật phải nộp đơn xin <b>Basic
+              access</b> và chờ Google duyệt. Đây là rào của Google, không phải của
+              Ads OS.
             </div>
           </Section>
 

@@ -14,6 +14,9 @@ export interface SessionData {
    * kẻ tấn công không dựng được state hợp lệ cho phiên của người khác.
    */
   fbOauthState?: string;
+  /** Cùng vai trò với fbOauthState, cho luồng OAuth của Google. Tách riêng để
+   *  hai luồng chạy song song không ghi đè state của nhau. */
+  googleOauthState?: string;
   /** Tài khoản QC đang xem. Xác thực lại quyền sở hữu mỗi lần đọc. */
   accountId?: string;
 }

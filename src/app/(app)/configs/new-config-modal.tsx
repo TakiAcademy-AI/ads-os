@@ -6,7 +6,19 @@ import { fieldsFor, REQUIRED_KEYS } from '@/lib/ads/metric-catalog';
 import { MultiSelect, type Option } from '@/components/multi-select';
 
 const IMPLEMENTED: AutomationKind[] = ['metric_sync', 'auto_pause', 'budget_schedule', 'post_trigger'];
-const READY_PLATFORMS: Platform[] = ['facebook'];
+
+/**
+ * Nền tảng nào chạy được loại nào.
+ *
+ * "Tự động chạy ads" bám vào bài viết trên Fanpage — Google Ads không có khái
+ * niệm tương đương, nên để nó chọn được Google là hứa một thứ không tồn tại.
+ */
+const READY_BY_KIND: Record<AutomationKind, Platform[]> = {
+  metric_sync: ['facebook', 'google'],
+  auto_pause: ['facebook', 'google'],
+  budget_schedule: ['facebook', 'google'],
+  post_trigger: ['facebook'],
+};
 
 const PLATFORM_LABEL: Record<Platform, string> = {
   facebook: 'Facebook', tiktok: 'TikTok', google: 'Google',
@@ -127,6 +139,12 @@ export function NewConfigModal({
     [keywordText],
   );
 
+  // Đổi sang loại mà nền tảng hiện tại không hỗ trợ thì kéo về Facebook, thay
+  // vì để nút Tạo bị vô hiệu hoá mà không nói vì sao.
+  useEffect(() => {
+    if (!READY_BY_KIND[kind].includes(platform)) setPlatform(READY_BY_KIND[kind][0]!);
+  }, [kind, platform]);
+
   useEffect(() => {
     if (kind !== 'post_trigger') return;
     fetch('/api/templates').then((r) => r.json())
@@ -218,7 +236,7 @@ export function NewConfigModal({
       ?? (editing ? 'Không lưu được thay đổi' : 'Không tạo được cấu hình'));
   }
 
-  const usable = IMPLEMENTED.includes(kind) && READY_PLATFORMS.includes(platform)
+  const usable = IMPLEMENTED.includes(kind) && READY_BY_KIND[kind].includes(platform)
     // post_trigger thiếu Page hoặc thiếu từ khoá thì tạo ra một cấu hình không
     // bao giờ làm gì — chặn ngay ở nút bấm thay vì để người dùng chờ vô ích.
     && (kind !== 'post_trigger' || (!!pageId && keywords.length > 0));
@@ -282,11 +300,14 @@ export function NewConfigModal({
           <div style={{ padding: '20px 22px', overflowY: 'auto' }}>
             {error && <div className="err" style={{ marginBottom: 14 }}>{error}</div>}
 
-            <Section title="Nền tảng">
+            <Section title="Nền tảng"
+                     hint={kind === 'post_trigger'
+                       ? 'Chỉ Facebook — tính năng này bám vào bài viết trên Fanpage, Google Ads không có khái niệm tương đương.'
+                       : undefined}>
               <div style={{ display: 'inline-flex', gap: 4, background: 'var(--side)',
                             padding: 4, borderRadius: 'var(--r-sm)' }}>
                 {PLATFORMS.map((p) => {
-                  const ready = READY_PLATFORMS.includes(p);
+                  const ready = READY_BY_KIND[kind].includes(p);
                   const on = platform === p;
                   return (
                     <button
