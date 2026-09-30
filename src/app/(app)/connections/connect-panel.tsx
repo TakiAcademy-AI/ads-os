@@ -127,23 +127,25 @@ export function ConnectPanel({ oauthReady, googleReady, googleDevToken }: {
 
         <div style={{ display: 'flex', gap: 4, background: 'var(--side)', padding: 4,
                       borderRadius: 'var(--r-sm)', marginBottom: 16, width: 'fit-content' }}>
+          {/* Tab CHƯA cấu hình vẫn bấm được — hướng dẫn cách cấu hình nằm bên
+              trong tab đó. Khoá tab lại là giấu lời giải sau đúng cánh cửa mà
+              nó dạy cách mở. */}
           {([
             ['oauth', 'Facebook', oauthReady],
             ['google', 'Google Ads', googleReady],
             ['token', 'Dán token thủ công', true],
           ] as const).map(([m, label, ready]) => (
-            <button key={m} onClick={() => ready && setMode(m)}
-                    disabled={!ready}
+            <button key={m} onClick={() => setMode(m)}
                     style={{
                       padding: '7px 15px', fontSize: 13, fontWeight: 500, fontFamily: 'inherit',
-                      border: 0, borderRadius: 6,
-                      cursor: ready ? 'pointer' : 'not-allowed',
+                      border: 0, borderRadius: 6, cursor: 'pointer',
                       background: mode === m ? 'var(--card)' : 'transparent',
                       color: mode === m ? 'var(--ink)' : 'var(--dim)',
-                      opacity: ready ? 1 : .5,
                     }}>
               {label}
-              {!ready && <span style={{ fontSize: 9, marginLeft: 5 }}>CHƯA CẤU HÌNH</span>}
+              {!ready && (
+                <span style={{ fontSize: 9, marginLeft: 5, letterSpacing: .3 }}>CHƯA CẤU HÌNH</span>
+              )}
             </button>
           ))}
         </div>
