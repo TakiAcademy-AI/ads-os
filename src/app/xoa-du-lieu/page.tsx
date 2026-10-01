@@ -102,8 +102,9 @@ export default async function DataDeletionPage({
         Quyền được cấp gồm <span className="mono">ads_read</span>,{' '}
         <span className="mono">ads_management</span>,{' '}
         <span className="mono">business_management</span>,{' '}
-        <span className="mono">pages_show_list</span> và{' '}
-        <span className="mono">pages_read_engagement</span>. Trong đó{' '}
+        <span className="mono">pages_show_list</span>,{' '}
+        <span className="mono">pages_read_engagement</span> và{' '}
+        <span className="mono">pages_manage_ads</span>. Trong đó{' '}
         <span className="mono">ads_management</span> cho phép tạm dừng chiến dịch và đổi
         ngân sách — chỉ được dùng khi bạn tự bật chế độ ghi thật trên từng cấu hình tự
         động hoá, và mọi thay đổi đều ghi vào nhật ký.

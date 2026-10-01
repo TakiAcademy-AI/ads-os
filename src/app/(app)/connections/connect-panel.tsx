@@ -171,7 +171,8 @@ export function ConnectPanel({ oauthReady, googleReady, googleDevToken }: {
                   <span className="mono">ads_read</span>, <span className="mono">ads_management</span>,{' '}
                   <span className="mono">business_management</span>,{' '}
                   <span className="mono">pages_show_list</span>,{' '}
-                  <span className="mono">pages_read_engagement</span> — tức là có quyền
+                  <span className="mono">pages_read_engagement</span>,{' '}
+                  <span className="mono">pages_manage_ads</span> — tức là có quyền
                   tắt chiến dịch và đổi ngân sách. <b>Nhưng mặc định mọi cấu hình chạy ở
                   chế độ thử và không đụng vào tài khoản của bạn</b>; chỉ khi bạn tự tay
                   bật &ldquo;ghi thật&rdquo; trên từng cấu hình thì bot mới được hành động, và vẫn

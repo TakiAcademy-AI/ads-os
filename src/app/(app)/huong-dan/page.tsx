@@ -268,12 +268,13 @@ export default async function GuidePage() {
 
           <Section id="quyen" title="Quyền Facebook — làm được gì, không làm được gì">
             <p style={{ margin: '0 0 12px' }}>
-              Khi kết nối, Ads OS xin 5 quyền:{' '}
+              Khi kết nối, Ads OS xin 6 quyền:{' '}
               <span className="mono">ads_read</span>,{' '}
               <span className="mono">ads_management</span>,{' '}
               <span className="mono">business_management</span>,{' '}
               <span className="mono">pages_show_list</span>,{' '}
-              <span className="mono">pages_read_engagement</span>.
+              <span className="mono">pages_read_engagement</span>,{' '}
+              <span className="mono">pages_manage_ads</span>.
             </p>
             <p style={{ margin: '0 0 12px' }}>
               Trong đó <span className="mono">ads_management</span> cho phép tạm dừng
