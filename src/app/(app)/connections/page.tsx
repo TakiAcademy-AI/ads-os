@@ -24,7 +24,7 @@ export default async function ConnectionsPage() {
   const user = await requireUser();
 
   const { rows: accounts } = await db.query(
-    `SELECT id, platform, external_id, name, currency, timezone, status,
+    `SELECT id, platform, external_id, name, currency, timezone, status, token_source,
             last_synced_at, last_error, (encrypted_token IS NOT NULL) AS has_token
      FROM ad_account WHERE owner_id = $1 ORDER BY created_at`,
     [user.id],
@@ -92,6 +92,9 @@ export default async function ConnectionsPage() {
                       <span className={`tag ${a.has_token ? 'tag-ok' : 'tag-over'}`}>
                         {a.has_token ? 'đã lưu' : 'chưa có'}
                       </span>
+                      {a.has_token && a.token_source === 'manual' && (
+                        <div className="note" style={{ margin: '4px 0 0' }}>dán tay · token chính</div>
+                      )}
                     </td>
                     <td style={{ color: 'var(--dim)' }}>
                       {a.last_synced_at ? dateTime(new Date(a.last_synced_at).toISOString()) : 'chưa bao giờ'}

@@ -20,10 +20,11 @@ export async function GET() {
 export async function POST() {
   const user = await requireWriter();
 
+  // Token dán tay là token chính — ưu tiên nó, rồi mới tới tài khoản cập nhật gần nhất.
   const { rows } = await db.query(
     `SELECT id FROM ad_account
      WHERE owner_id = $1 AND platform = 'facebook' AND encrypted_token IS NOT NULL
-     ORDER BY updated_at DESC LIMIT 1`,
+     ORDER BY (token_source = 'manual') DESC, updated_at DESC LIMIT 1`,
     [user.id],
   );
   if (!rows[0]) {

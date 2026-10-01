@@ -74,7 +74,11 @@ export async function GET(req: Request) {
 
     // Lưu ở trạng thái 'pending' — người dùng tự chọn tài khoản nào thực sự
     // muốn dùng thay vì bật hết.
+    //
+    // Tài khoản đang dùng token dán tay (token_source = 'manual') thì GIỮ token
+    // đó: token tay là token chính, đăng nhập lại không được đè — xem migration 013.
     let saved = 0;
+    let keptManual = 0;
     for (const a of accounts) {
       const { rows } = await db.query(
         `INSERT INTO ad_account
@@ -84,25 +88,39 @@ export async function GET(req: Request) {
            name = EXCLUDED.name, currency = EXCLUDED.currency,
            timezone = EXCLUDED.timezone, fb_user_id = EXCLUDED.fb_user_id,
            last_error = NULL, updated_at = NOW()
-         RETURNING id`,
+         RETURNING id, token_source`,
         [user.id, a.id, a.name, a.currency, a.timezone_name, me?.id ?? null],
       );
-      if (rows[0]) { await saveToken(rows[0].id, long.token); saved++; }
+      if (!rows[0]) continue;
+      if (rows[0].token_source === 'manual') { keptManual++; continue; }
+      await saveToken(rows[0].id, long.token);
+      saved++;
     }
 
     // Page và token của Page lấy luôn ở đây. Token của Page chỉ xuất hiện trong
     // /me/accounts — không có endpoint nào lấy lại được sau này bằng user token,
     // nên bỏ lỡ lúc này là phải bắt người dùng kết nối lại.
+    //
+    // Trừ khi đang có token dán tay: Page khi đó đã nạp bằng token chính, ghi đè
+    // bằng token đăng nhập là đưa token phụ vào đúng chỗ người dùng không muốn.
+    const { rows: manual } = await db.query(
+      `SELECT 1 FROM ad_account
+       WHERE owner_id = $1 AND platform = 'facebook' AND token_source = 'manual'
+         AND encrypted_token IS NOT NULL LIMIT 1`,
+      [user.id],
+    );
     let pages = 0;
-    try {
-      pages = await savePages(user.id, await fetchPages(long.token));
-    } catch (e) {
-      // Thiếu pages_show_list không được làm hỏng cả kết nối — tài khoản quảng
-      // cáo vẫn dùng được, chỉ "Tự động chạy ads" là chưa chạy được.
-      console.error('[callback] không lấy được Page:', e instanceof Error ? e.message : e);
+    if (manual.length === 0) {
+      try {
+        pages = await savePages(user.id, await fetchPages(long.token));
+      } catch (e) {
+        // Thiếu pages_show_list không được làm hỏng cả kết nối — tài khoản quảng
+        // cáo vẫn dùng được, chỉ "Tự động chạy ads" là chưa chạy được.
+        console.error('[callback] không lấy được Page:', e instanceof Error ? e.message : e);
+      }
     }
 
-    return html(origin, { ok: true, accounts: saved, pages, expiresIn: long.expiresIn });
+    return html(origin, { ok: true, accounts: saved, keptManual, pages, expiresIn: long.expiresIn });
   } catch (e) {
     return html(origin, { ok: false, error: e instanceof Error ? e.message : 'Lỗi không rõ' });
   }

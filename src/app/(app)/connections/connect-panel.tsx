@@ -40,6 +40,7 @@ export function ConnectPanel({ oauthReady, googleReady, googleDevToken }: {
       if (e.origin !== window.location.origin) return;
       const d = e.data as {
         ok?: boolean; accounts?: number; error?: string; pages?: number; managers?: number;
+        keptManual?: number;
       };
       if (typeof d?.ok !== 'boolean') return;
       setBusy(false);
@@ -49,7 +50,10 @@ export function ConnectPanel({ oauthReady, googleReady, googleDevToken }: {
           + (d.pages ? ` Kèm ${d.pages} Page.` : '')
           // MCC không chạy quảng cáo trực tiếp nên bị bỏ qua — nói ra để người
           // dùng không thắc mắc vì sao thiếu mất vài tài khoản.
-          + (d.managers ? ` Bỏ qua ${d.managers} tài khoản quản lý (MCC).` : ''),
+          + (d.managers ? ` Bỏ qua ${d.managers} tài khoản quản lý (MCC).` : '')
+          + (d.keptManual
+            ? ` Giữ nguyên token dán tay của ${d.keptManual} tài khoản — token đó là token chính.`
+            : ''),
         );
         setError('');
         router.refresh();
@@ -94,19 +98,26 @@ export function ConnectPanel({ oauthReady, googleReady, googleDevToken }: {
     else setError(body.error ?? 'Không kiểm tra được token');
   }
 
-  async function save(a: Found) {
-    setSaving(a.externalId); setError('');
+  async function save(externalIds: string[]) {
+    setSaving(externalIds.length === 1 ? externalIds[0]! : '*'); setError(''); setInfo('');
     const res = await fetch('/api/connections', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        token: token.trim(), externalId: a.externalId, name: a.name,
-        currency: a.currency, timezone: a.timezone,
-      }),
+      body: JSON.stringify({ token: token.trim(), externalIds }),
     });
+    const d = await res.json().catch(() => ({}));
     setSaving('');
-    if (res.ok) { setToken(''); setFound(null); router.refresh(); }
-    else setError((await res.json().catch(() => ({}))).error ?? 'Không lưu được');
+    if (!res.ok) { setError(d.error ?? 'Không lưu được'); return; }
+    setToken(''); setFound(null);
+    setInfo(
+      `Đã lưu token chính cho ${d.saved} tài khoản.`
+      + (d.pages ? ` Nạp ${d.pages} Page.` : '')
+      + (d.pagesError ? ` Không lấy được Page: ${d.pagesError}` : '')
+      + (!d.pages && !d.pagesError
+        ? ' Không thấy Page nào — token thiếu quyền pages_show_list hoặc chưa được gán Page.'
+        : ''),
+    );
+    router.refresh();
   }
 
   return (
@@ -133,7 +144,7 @@ export function ConnectPanel({ oauthReady, googleReady, googleDevToken }: {
           {([
             ['oauth', 'Facebook', oauthReady],
             ['google', 'Google Ads', googleReady],
-            ['token', 'Dán token thủ công', true],
+            ['token', 'Dán token (token chính)', true],
           ] as const).map(([m, label, ready]) => (
             <button key={m} onClick={() => setMode(m)}
                     style={{
@@ -226,7 +237,7 @@ export function ConnectPanel({ oauthReady, googleReady, googleDevToken }: {
         {mode === 'token' && (
           <>
             <div style={{ fontSize: 12.5, color: 'var(--ink-2)', marginBottom: 8 }}>
-              System User access token
+              User access token hoặc System User token
             </div>
             <div style={{ display: 'flex', gap: 9 }}>
               <input
@@ -239,16 +250,32 @@ export function ConnectPanel({ oauthReady, googleReady, googleDevToken }: {
               </button>
             </div>
             <div className="note" style={{ maxWidth: 'none', marginTop: 8 }}>
-              System User token <b>không hết hạn</b> — hợp cho chạy nền dài hạn, nhưng phải tự
-              tạo trong Business Settings. Token mã hoá trước khi lưu và không hiện lại.
+              Token dán ở đây là <b>token chính</b>: mọi việc với tài khoản đã chọn — kéo số,
+              tắt/sửa, tạo quảng cáo — đều dùng nó, và <b>Đăng nhập bằng Facebook không ghi đè</b>.
+              Muốn bỏ thì bấm Ngắt tài khoản. Page cũng được nạp bằng token này. Token cần đủ quyền{' '}
+              <span className="mono">ads_management</span>, <span className="mono">pages_show_list</span>,{' '}
+              <span className="mono">pages_read_engagement</span>, <span className="mono">pages_manage_ads</span>.
+              <br />
+              Token lấy từ Graph API Explorer <b>hết hạn sau 1–2 giờ</b> — đưa qua Access Token
+              Debugger bấm &ldquo;Extend Access Token&rdquo; để có token 60 ngày. System User token
+              (tạo trong Business Settings) <b>không hết hạn</b>. Token mã hoá trước khi lưu và
+              không hiện lại.
             </div>
 
             {found && (
               <div style={{ marginTop: 18 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>
-                  {found.length === 0
-                    ? 'Token hợp lệ nhưng không truy cập được tài khoản quảng cáo nào'
-                    : `Tìm thấy ${found.length} tài khoản`}
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8, gap: 10 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>
+                    {found.length === 0
+                      ? 'Token hợp lệ nhưng không truy cập được tài khoản quảng cáo nào'
+                      : `Tìm thấy ${found.length} tài khoản`}
+                  </div>
+                  {found.length > 1 && (
+                    <button className="btn" style={{ fontSize: 12.5 }} disabled={!!saving}
+                            onClick={() => save(found.map((a) => a.externalId))}>
+                      {saving === '*' ? 'Đang lưu…' : 'Dùng làm token chính cho tất cả'}
+                    </button>
+                  )}
                 </div>
                 {found.map((a) => (
                   <div key={a.externalId} style={{
@@ -263,8 +290,8 @@ export function ConnectPanel({ oauthReady, googleReady, googleDevToken }: {
                     </div>
                     {!a.active && <span className="tag tag-hold">không hoạt động</span>}
                     <button className="btn btn-ghost" style={{ fontSize: 12.5 }}
-                            disabled={saving === a.externalId} onClick={() => save(a)}>
-                      {saving === a.externalId ? 'Đang lưu…' : 'Kết nối'}
+                            disabled={!!saving} onClick={() => save([a.externalId])}>
+                      {saving === a.externalId ? 'Đang lưu…' : 'Dùng token này'}
                     </button>
                   </div>
                 ))}

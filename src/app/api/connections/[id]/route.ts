@@ -21,13 +21,18 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   return NextResponse.json({ ok: true });
 }
 
-/** Ngắt kết nối và xoá token. Giữ lại số liệu đã kéo về. */
+/**
+ * Ngắt kết nối và xoá token. Giữ lại số liệu đã kéo về.
+ *
+ * Đặt lại token_source về 'oauth': hết token tay thì lần đăng nhập Facebook
+ * sau được phép ghi token vào. Đây là đường duy nhất để bỏ token tay.
+ */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const user = await requireWriter();
   const { id } = await ctx.params;
   const { rowCount } = await db.query(
     `UPDATE ad_account
-     SET encrypted_token = NULL, status = 'disconnected', updated_at = NOW()
+     SET encrypted_token = NULL, token_source = 'oauth', status = 'disconnected', updated_at = NOW()
      WHERE id = $2 AND owner_id = $1`,
     [user.id, id],
   );
