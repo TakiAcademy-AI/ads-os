@@ -209,9 +209,14 @@ export async function createBoostCampaign(token: string, spec: BoostSpec): Promi
   created.adsetId = adset.id;
 
   // 3. Creative trỏ THẲNG vào bài viết có sẵn — không dựng nội dung mới.
+  //
+  // Mục tiêu Tin nhắn cần thêm nút nhắn tin: đích MESSENGER mà creative không
+  // có call_to_action thì Facebook từ chối ở bước TẠO QUẢNG CÁO (100/1487891),
+  // không phải ở đây. validate_only ở bước này cũng không bắt được.
   const creative = await post<{ id: string }>(`/${act}/adcreatives`, {
     name: `${spec.campaignName} — creative`,
     object_story_id: spec.postId,
+    ...(obj.callToAction ? { call_to_action: JSON.stringify(obj.callToAction) } : {}),
   }, token, 'creative', created);
   created.creativeId = creative.id;
 

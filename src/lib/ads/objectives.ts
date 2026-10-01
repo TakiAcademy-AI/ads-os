@@ -29,6 +29,18 @@ export interface ObjectiveSpec {
    *   pixel — { pixel_id, custom_event_type }
    */
   promoted: null | 'page' | 'pixel';
+  /**
+   * call_to_action gắn vào creative.
+   *
+   * Đích MESSENGER đòi creative phải có nút nhắn tin. Creative trỏ trần vào bài
+   * viết (chỉ object_story_id) bị từ chối ở bước TẠO QUẢNG CÁO với mã
+   * 100/1487891 "nội dung quảng cáo không tương thích với mục tiêu" — ba bước
+   * trước vẫn qua hết.
+   *
+   * Cảnh báo: validate_only ở bước creative CHẤP NHẬN cả creative thiếu nút
+   * này. Không dùng nó để kiểm chỗ này được, phải chạy thật.
+   */
+  callToAction?: { type: string; value: Record<string, string> };
 }
 
 export const OBJECTIVE: Record<AdObjective, ObjectiveSpec> = {
@@ -47,6 +59,9 @@ export const OBJECTIVE: Record<AdObjective, ObjectiveSpec> = {
     optimizationGoal: 'CONVERSATIONS',
     destinationType: 'MESSENGER',
     promoted: 'page',
+    // Lấy từ quảng cáo tin nhắn thật trong tài khoản người dùng: creative của
+    // nó mang call_to_action_type = MESSAGE_PAGE với app_destination MESSENGER.
+    callToAction: { type: 'MESSAGE_PAGE', value: { app_destination: 'MESSENGER' } },
   },
   sales: {
     label: 'Chuyển đổi',
