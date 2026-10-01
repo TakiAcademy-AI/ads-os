@@ -8,6 +8,7 @@
 // trước đã tạo rồi — hàm trả về những gì đã tạo để nơi gọi ghi nhật ký và dọn.
 
 import { microsToMinor } from './currency';
+import { fbActionHint } from './facebook-write';
 import { buildTargeting, type TargetingSpec } from './targeting';
 import { OBJECTIVE, promotedObject, missingRequirement, type AdObjective } from './objectives';
 
@@ -104,9 +105,9 @@ async function post<T>(
     const e = json.error;
     const title = e.error_user_title ? `${e.error_user_title}: ` : '';
     const code = e.code ? ` [mã ${e.code}${e.error_subcode ? `/${e.error_subcode}` : ''}]` : '';
-    throw new AdCreateError(
-      `${title}${e.error_user_msg || e.message || `HTTP ${res.status}`}${code}`, step, created,
-    );
+    const text = fbActionHint(e.code, e.error_subcode)
+      ?? `${title}${e.error_user_msg || e.message || `HTTP ${res.status}`}`;
+    throw new AdCreateError(`${text}${code}`, step, created);
   }
   // Ở chế độ kiểm thử, Facebook trả 200 không có id — đó mới là thành công.
   if (!res.ok || (!validateOnly && !json.id)) {

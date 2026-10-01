@@ -33,16 +33,13 @@ export const SCOPES = [
   // rất dễ tưởng tài khoản không có Page nào.
   'pages_show_list',
   'pages_read_engagement',
-  // Quản lý quảng cáo gắn với một Page.
+  // Quản lý quảng cáo gắn với một Page: bước tạo `ad` trỏ vào bài viết Page qua
+  // object_story_id cần quyền này. Có trong use case "Tạo và quản lý quảng cáo
+  // bằng API Marketing" của App Dashboard.
   //
-  // Thiếu quyền này thì ba bước đầu của chuỗi tạo quảng cáo vẫn chạy, nhưng
-  // bước cuối — tạo `ad` trỏ vào bài viết Page qua object_story_id — bị từ
-  // chối. Facebook báo bằng thông điệp "tài khoản cần xác thực" (mã 31/3858385)
-  // không hề nhắc tới quyền còn thiếu, nên mất rất nhiều công mới lần ra.
-  //
-  // Phát hiện khi đọc danh sách quyền của use case "Tạo và quản lý quảng cáo
-  // bằng API Marketing" trong App Dashboard: quyền này có trong use case nhưng
-  // ứng dụng chưa gọi lần nào.
+  // Lỗi 31/3858385 "Please authenticate your account" ở bước tạo ad từng bị
+  // nghi là do thiếu quyền này. KHÔNG phải: đó là chốt bảo mật của Meta, phải
+  // xác thực trong Ads Manager mới gỡ — xem fbActionHint trong facebook-write.ts.
   'pages_manage_ads',
 ] as const;
 

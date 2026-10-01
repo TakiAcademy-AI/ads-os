@@ -22,6 +22,30 @@ export class FacebookWriteError extends Error {
 interface GraphErr { message?: string; code?: number; error_subcode?: number }
 
 /**
+ * Hướng dẫn cho những lỗi chỉ người dùng tự tay gỡ được, code không sửa được.
+ *
+ * 31/3858385 là chốt bảo mật của Meta, KHÔNG phải lỗi payload hay thiếu quyền:
+ * Meta nghi truy cập lạ (IP mới — chính là VPS chạy app, tạo dồn dập qua API...)
+ * nên khoá quyền tạo/sửa quảng cáo của tài khoản. Thông điệp gốc "Please
+ * authenticate your account" không nói phải làm gì. Kết nối lại hay đổi token
+ * KHÔNG gỡ được — chỉ xác thực trong Ads Manager mới gỡ, và thử lại liên tục
+ * chỉ làm Meta nghi thêm.
+ */
+export function fbActionHint(code?: number, subcode?: number): string | null {
+  if (code === 31 && subcode === 3858385) {
+    return 'Meta đang tạm khoá quyền tạo/sửa quảng cáo của tài khoản này để kiểm tra bảo mật. '
+      + 'Cách gỡ: đăng nhập Facebook bằng đúng tài khoản đã kết nối với Ads OS (dùng System '
+      + 'User token thì là admin của Business), vào Ads Manager → chọn tài khoản quảng cáo → '
+      + 'mở chỉnh sửa một nhóm quảng cáo bất kỳ → bấm "Start authentication" ở khung '
+      + '"Verifying your changes" bên phải. Không thấy nút thì xem Business Settings → '
+      + 'Security Center; khoá thường tự gỡ sau vài ngày. Đã xác thực mà vẫn lỗi thì kiểm tra '
+      + 'người kết nối có vai trò trong Business sở hữu tài khoản quảng cáo. Kết nối lại hay '
+      + 'đổi token không gỡ được lỗi này — đừng bấm thử lại liên tục.';
+  }
+  return null;
+}
+
+/**
  * Gọi lệnh ghi. KHÔNG thử lại.
  *
  * Retry một lệnh ghi là nguy hiểm: request có thể đã tới Facebook và thành công
@@ -47,7 +71,7 @@ async function write(path: string, body: Record<string, string>, token: string):
     // 200/10 = thiếu quyền; 190 = token hỏng; 100 = tham số sai.
     const isPermission = e.code === 200 || e.code === 10 || e.code === 190;
     throw new FacebookWriteError(
-      e.message ?? `Facebook trả HTTP ${res.status}`,
+      fbActionHint(e.code, e.error_subcode) ?? e.message ?? `Facebook trả HTTP ${res.status}`,
       e.code,
       isPermission,
     );
