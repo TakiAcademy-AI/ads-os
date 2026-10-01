@@ -336,8 +336,11 @@ export function TargetingFields({
         <span style={{ fontSize: 13 }}>
           Mở rộng đối tượng (Advantage+ Audience)
           <span style={{ display: 'block', fontSize: 11.5, color: 'var(--dim)', marginTop: 2 }}>
-            Cho Facebook phân phối ra ngoài tuổi và sở thích bạn vừa khai nếu nó
-            thấy nhóm khác rẻ hơn. Giới hạn tỉnh/thành vẫn được giữ nguyên.
+            Bật lên thì <b>tuổi và giới tính thành gợi ý, không còn là giới hạn</b> —
+            Facebook được phép phân phối ra ngoài khoảng bạn chọn nếu thấy nhóm
+            khác rẻ hơn. Đây là quy định của Facebook, không phải lựa chọn của
+            Ads OS: nó từ chối thẳng nhóm quảng cáo nào vừa bật mở rộng vừa chặn
+            cứng tuổi. Tỉnh/thành thì vẫn được giữ nguyên.
           </span>
         </span>
       </label>

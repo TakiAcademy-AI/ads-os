@@ -51,14 +51,37 @@ export function buildTargeting(t: TargetingSpec): Record<string, unknown> {
     geo.countries = t.countries;
   }
 
-  const out: Record<string, unknown> = {
-    geo_locations: geo,
-    age_min: t.ageMin,
-    age_max: t.ageMax,
-    targeting_automation: { advantage_audience: t.advantageAudience ? 1 : 0 },
-  };
+  const out: Record<string, unknown> = { geo_locations: geo };
+
+  if (t.advantageAudience) {
+    // Bật mở rộng đối tượng thì tuổi và giới tính KHÔNG còn là giới hạn cứng
+    // nữa, chúng thành gợi ý. Facebook từ chối thẳng ở bước tạo nhóm quảng cáo
+    // nếu gửi age_max dưới 65 kèm advantage_audience=1 — mã lỗi 100/1870189.
+    //
+    // Cách khai đúng, lấy từ nhóm quảng cáo thật do Ads Manager tạo:
+    //   age_min   = tuổi tối thiểu nhưng trần ở 25 (giới hạn cứng duy nhất còn lại)
+    //   age_max   = luôn 65
+    //   age_range = khoảng người dùng thực sự muốn, dạng gợi ý
+    //   individual_setting = cờ đánh dấu tuổi và giới tính là gợi ý
+    //
+    // Thiếu individual_setting thì Facebook vẫn hiểu age_min/age_max là giới
+    // hạn cứng và lỗi y như cũ.
+    out.age_min = Math.min(t.ageMin, 25);
+    out.age_max = 65;
+    out.age_range = [t.ageMin, t.ageMax];
+    out.targeting_automation = {
+      advantage_audience: 1,
+      individual_setting: { age: 1, gender: 1 },
+    };
+  } else {
+    out.age_min = t.ageMin;
+    out.age_max = t.ageMax;
+    out.targeting_automation = { advantage_audience: 0 };
+  }
 
   // Mảng rỗng = mọi giới. Gửi [] lên Facebook thì không ai thấy quảng cáo.
+  // Khi bật mở rộng đối tượng, trường này vẫn gửi nhưng Facebook đọc nó như
+  // gợi ý — individual_setting.gender ở trên quyết định điều đó.
   if (t.genders.length === 1) out.genders = t.genders;
 
   if (t.interests.length) {

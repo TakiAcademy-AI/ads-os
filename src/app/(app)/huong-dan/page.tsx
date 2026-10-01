@@ -163,9 +163,12 @@ export default async function GuidePage() {
                 đâu cả — ô lưu sẽ khoá lại.
               </li>
               <li>
-                <b>Mở rộng đối tượng cho Facebook đi ra ngoài tuổi và sở thích bạn khai.</b>
-                {' '}Giới hạn tỉnh/thành vẫn giữ. Mặc định tắt vì thứ bạn khai phải được
-                tôn trọng.
+                <b>Mở rộng đối tượng biến tuổi và giới tính thành gợi ý.</b> Facebook
+                không cho vừa bật mở rộng vừa chặn cứng tuổi — nó từ chối thẳng nhóm
+                quảng cáo. Ads OS tự chuyển khoảng tuổi bạn chọn sang dạng gợi ý để
+                vẫn đăng được, nhưng hãy hiểu là quảng cáo <b>có thể hiện cho người
+                ngoài khoảng đó</b>. Tỉnh/thành vẫn giữ. Mặc định tắt vì thứ bạn khai
+                phải được tôn trọng.
               </li>
             </ul>
             <p style={{ margin: 0 }}>
