@@ -54,6 +54,9 @@ export async function POST(req: Request) {
     currency: acct[0].currency as string,
     dailyBudgetMicros: tpl.dailyBudgetMicros,
     targeting: templateToTargeting(tpl),
+    objective: tpl.objective,
+    pixelId: tpl.pixelId,
+    conversionEvent: tpl.conversionEvent,
   };
 
   // Kiểm trước: Facebook trả lỗi y như thật nhưng không tạo object nào, và

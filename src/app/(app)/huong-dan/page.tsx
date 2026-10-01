@@ -52,6 +52,7 @@ function Q({ q, children }: { q: string; children: React.ReactNode }) {
 const NAV = [
   { id: 'bat-dau', label: 'Ba bước bắt đầu' },
   { id: 'attribution', label: 'Vì sao tắt theo CPA là tắt oan' },
+  { id: 'muc-tieu', label: 'Ba mục tiêu chiến dịch' },
   { id: 'nham-doi-tuong', label: 'Nhắm đối tượng trong mẫu' },
   { id: 'bon-loai', label: 'Bốn loại tự động hoá' },
   { id: 'chay-thu', label: 'Chạy thử trước khi ghi thật' },
@@ -134,6 +135,38 @@ export default async function GuidePage() {
               attribution đo được&rdquo; tính từ chính lịch sử số liệu tài khoản bạn.
               Cần vài tuần đồng bộ mới đủ mẫu.
             </div>
+          </Section>
+
+          <Section id="muc-tieu" title="Ba mục tiêu chiến dịch">
+            <p style={{ margin: '0 0 12px' }}>
+              Mỗi mẫu chọn một mục tiêu. Mục tiêu quyết định Facebook đi tìm ai và
+              tính cái gì là &ldquo;một kết quả&rdquo; — chọn sai thì mọi con số phía
+              sau đều lệch.
+            </p>
+            <ul style={{ paddingLeft: 20, margin: '0 0 12px' }}>
+              <li style={{ marginBottom: 7 }}>
+                <b>Tin nhắn</b> — người xem bấm vào là mở Messenger nhắn cho Page.
+                Phổ biến nhất ở Việt Nam. Không cần pixel, không cần website.
+              </li>
+              <li style={{ marginBottom: 7 }}>
+                <b>Chuyển đổi</b> — tối ưu theo sự kiện pixel trên website. Phải
+                chọn pixel và sự kiện. Chọn sự kiện mà pixel <b>chưa từng ghi nhận</b>
+                {' '}thì Facebook không có gì để học và quảng cáo không phân phối được —
+                ô chọn pixel có hiện lần cuối nhận dữ liệu, hãy nhìn vào đó.
+              </li>
+              <li>
+                <b>Tương tác</b> — đẩy bài cho nhiều người thấy. Rẻ nhất, nhưng
+                <b> không đo được đơn hàng</b>, nên cũng là mục tiêu mà cơ chế tắt
+                tự động không giúp được gì: không có chuyển đổi thì CPA vô nghĩa,
+                và bot cố tình không tắt theo con số vô nghĩa.
+              </li>
+            </ul>
+            <p style={{ margin: 0 }}>
+              Mặc định là Tương tác vì đó là hành vi cũ của các mẫu tạo trước đây.
+              Nếu bạn chạy quảng cáo để bán hàng, hãy đổi sang Tin nhắn hoặc
+              Chuyển đổi — rồi vào <Link href="/configs" style={{ color: 'var(--acc-ink)', textDecoration: 'underline' }}>Cấu hình</Link> đặt
+              ngưỡng CPA cho đúng loại đó.
+            </p>
           </Section>
 
           <Section id="nham-doi-tuong" title="Nhắm đối tượng trong mẫu">

@@ -9,6 +9,7 @@
 
 import { microsToMinor } from './currency';
 import { buildTargeting, type TargetingSpec } from './targeting';
+import { OBJECTIVE, promotedObject, missingRequirement, type AdObjective } from './objectives';
 
 const GRAPH = 'https://graph.facebook.com';
 const VERSION = process.env.FB_API_VERSION || 'v23.0';
@@ -48,6 +49,14 @@ export interface BoostSpec {
    * trí hiển thị — boost cho toàn bộ dân số 18–65 cả nước thì CPA chắc chắn xấu.
    */
   targeting: TargetingSpec;
+  /**
+   * Mục tiêu chiến dịch. Quyết định cả bốn trường objective /
+   * optimization_goal / destination_type / promoted_object — xem objectives.ts.
+   */
+  objective: AdObjective;
+  /** Chỉ dùng khi objective = 'sales'. */
+  pixelId?: string | null;
+  conversionEvent?: string | null;
   /**
    * Tiền tệ của tài khoản quảng cáo.
    *
@@ -113,7 +122,7 @@ function actOf(spec: BoostSpec): string {
 function campaignBody(spec: BoostSpec): Record<string, string> {
   return {
     name: spec.campaignName,
-    objective: 'OUTCOME_ENGAGEMENT',
+    objective: OBJECTIVE[spec.objective].fbObjective,
     status: 'PAUSED',
     // Bắt buộc từ 2021. Rỗng = không thuộc nhóm nhà ở/việc làm/tín dụng.
     special_ad_categories: '[]',
@@ -143,13 +152,19 @@ export async function validateBoostCampaign(token: string, spec: BoostSpec): Pro
 /**
  * Tạo chiến dịch quảng cáo đẩy một bài viết có sẵn.
  *
- * Mục tiêu cố định là OUTCOME_ENGAGEMENT tối ưu POST_ENGAGEMENT — đây là loại
- * duy nhất chạy được từ một bài viết mà không cần pixel, tập đối tượng tuỳ
- * chỉnh hay trang đích.
+ * Ba mục tiêu: Tương tác, Tin nhắn, Chuyển đổi. Bộ tham số của từng cái nằm ở
+ * objectives.ts và phải khớp nhau theo bộ — đổi lẻ một trường là Facebook từ
+ * chối, thường ở bước adset nhưng đôi khi tận bước tạo quảng cáo.
  */
 export async function createBoostCampaign(token: string, spec: BoostSpec): Promise<CreatedAd> {
   const created: Partial<CreatedAd> = {};
   const act = actOf(spec);
+  const obj = OBJECTIVE[spec.objective];
+
+  // Chặn TRƯỚC khi gọi Facebook lần nào. Mẫu Chuyển đổi thiếu pixel sẽ hỏng ở
+  // bước adset, tức là sau khi chiến dịch đã được tạo và phải đi dọn.
+  const missing = missingRequirement(spec.objective, spec);
+  if (missing) throw new AdCreateError(missing, 'campaign', created);
 
   // 1. Chiến dịch — LUÔN PAUSED.
   const campaign = await post<{ id: string }>(
@@ -158,12 +173,13 @@ export async function createBoostCampaign(token: string, spec: BoostSpec): Promi
 
   // 2. Nhóm quảng cáo. Ngân sách đặt ở đây (ABO) vì chiến dịch chỉ có một nhóm.
   const budget = microsToMinor(spec.dailyBudgetMicros, spec.currency);
+  const promoted = promotedObject(spec.objective, spec);
   const adset = await post<{ id: string }>(`/${act}/adsets`, {
     name: `${spec.campaignName} — nhóm 1`,
     campaign_id: campaign.id,
     daily_budget: String(budget),
     billing_event: 'IMPRESSIONS',
-    optimization_goal: 'POST_ENGAGEMENT',
+    optimization_goal: obj.optimizationGoal,
     // Đấu thầu tự động. Phải đặt ở ĐÂY chứ không phải ở chiến dịch: Facebook
     // chỉ nhận bid_strategy ở cấp nào giữ ngân sách, mà ngân sách của ta ở cấp
     // nhóm. Các chiến lược khác đòi khai giá thầu trần — con số người dùng
@@ -177,11 +193,11 @@ export async function createBoostCampaign(token: string, spec: BoostSpec): Promi
     // không hề nhắc tới trường còn thiếu.
     //
     // ON_PAGE và ON_AD đều bị từ chối với POST_ENGAGEMENT.
-    destination_type: 'ON_POST',
-    // CỐ Ý không đặt promoted_object. Nghe thì hợp lý — khai rõ quảng cáo cho
-    // Page nào — nhưng với POST_ENGAGEMENT thì Facebook từ chối thẳng:
-    // "không thể dùng mục tiêu hiệu quả đã chọn cho mục tiêu chiến dịch".
-    // promoted_object{page_id} chỉ dành cho PAGE_LIKES.
+    destination_type: obj.destinationType,
+    // promoted_object chỉ gửi khi mục tiêu cần, và phải BỎ HẲN trường chứ không
+    // gửi rỗng với Tương tác: POST_ENGAGEMENT kèm promoted_object bị từ chối
+    // thẳng ("không thể dùng mục tiêu hiệu quả đã chọn cho mục tiêu chiến dịch").
+    ...(promoted ? { promoted_object: JSON.stringify(promoted) } : {}),
     // buildTargeting lo phần khó: tỉnh/thành thay thế quốc gia chứ không cộng
     // thêm, giới tính rỗng thì BỎ trường thay vì gửi mảng rỗng, và vị trí tự
     // động thì không gửi trường vị trí nào. Xem ghi chú ở targeting.ts —

@@ -20,6 +20,7 @@ import { createBoostCampaign, cleanupPartial, AdCreateError } from '../ads/faceb
 import { safeParams } from '../configs/schema';
 import { getTemplate, templateToTargeting } from '../queries/templates';
 import type { TargetingSpec } from '../ads/targeting';
+import type { AdObjective } from '../ads/objectives';
 
 export interface PostTriggerResult {
   scanned: number;
@@ -122,6 +123,10 @@ export async function runPostTrigger(
   // trước khi có mẫu quảng cáo vẫn chạy y như cũ: quốc gia + khoảng tuổi, mọi
   // giới, mọi vị trí.
   let budgetMicros = p.dailyBudgetMicros;
+  // Không có mẫu thì giữ nguyên hành vi cũ: Tương tác, đẩy bài viết.
+  let objective: AdObjective = 'engagement';
+  let pixelId: string | null = null;
+  let conversionEvent: string | null = null;
   let targeting: TargetingSpec = {
     countries: p.countries, locations: [], ageMin: p.ageMin, ageMax: p.ageMax,
     genders: [], interests: [], placements: { automatic: true },
@@ -132,6 +137,9 @@ export async function runPostTrigger(
     if (tpl) {
       budgetMicros = tpl.dailyBudgetMicros;
       targeting = templateToTargeting(tpl);
+      objective = tpl.objective;
+      pixelId = tpl.pixelId;
+      conversionEvent = tpl.conversionEvent;
     } else {
       out.notes.push('Mẫu quảng cáo đã bị xoá — dùng tham số khai trong cấu hình');
     }
@@ -190,6 +198,9 @@ export async function runPostTrigger(
         currency,
         dailyBudgetMicros: budgetMicros,
         targeting,
+        objective,
+        pixelId,
+        conversionEvent,
       });
 
       await db.query(

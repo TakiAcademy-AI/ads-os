@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { requireUser } from '@/lib/session';
 import { readToken } from '@/lib/ads/token';
 import { estimateReach } from '@/lib/ads/targeting';
+import { OBJECTIVE, AD_OBJECTIVES, type AdObjective } from '@/lib/ads/objectives';
 import { db } from '@/lib/db';
 
 export const runtime = 'nodejs';
@@ -29,6 +30,7 @@ const Body = z.object({
     instagramPositions: z.array(z.string()).optional(),
   }),
   advantageAudience: z.boolean(),
+  objective: z.enum(AD_OBJECTIVES as [AdObjective, ...AdObjective[]]).default('engagement'),
 });
 
 export async function POST(req: Request) {
@@ -56,7 +58,9 @@ export async function POST(req: Request) {
   if (!token) return Response.json({ error: 'Không đọc được token' }, { status: 400 });
 
   try {
-    return Response.json(await estimateReach(token, rows[0].external_id, parsed.data));
+    return Response.json(await estimateReach(
+      token, rows[0].external_id, parsed.data,
+      OBJECTIVE[parsed.data.objective].optimizationGoal));
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : 'Lỗi không rõ' }, { status: 502 },

@@ -116,9 +116,12 @@ export function buildTargeting(t: TargetingSpec): Record<string, unknown> {
  */
 export async function estimateReach(
   token: string, actId: string, t: TargetingSpec,
+  // Cỡ đối tượng khác nhau theo cách tối ưu — ước tính cho POST_ENGAGEMENT
+  // trong khi quảng cáo chạy CONVERSATIONS là đưa người dùng con số sai.
+  optimizationGoal = 'POST_ENGAGEMENT',
 ): Promise<{ lower: number; upper: number }> {
   const u = new URL(`${GRAPH}/${VERSION}/${actId}/delivery_estimate`);
-  u.searchParams.set('optimization_goal', 'POST_ENGAGEMENT');
+  u.searchParams.set('optimization_goal', optimizationGoal);
   u.searchParams.set('targeting_spec', JSON.stringify(buildTargeting(t)));
   const res = await fetch(u, {
     headers: { Authorization: `Bearer ${token}` },

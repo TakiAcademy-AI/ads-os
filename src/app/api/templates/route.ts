@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireUser, requireWriter } from '@/lib/session';
 import { listTemplates, createTemplate } from '@/lib/queries/templates';
+import { AD_OBJECTIVES, isConversionEvent, type AdObjective } from '@/lib/ads/objectives';
 
 export const runtime = 'nodejs';
 
@@ -25,10 +26,19 @@ export const TemplateBody = z.object({
     instagramPositions: z.array(z.string()).optional(),
   }).default({ automatic: true }),
   advantageAudience: z.boolean().default(false),
+  objective: z.enum(AD_OBJECTIVES as [AdObjective, ...AdObjective[]]).default('engagement'),
+  pixelId: z.string().nullable().default(null),
+  conversionEvent: z.string().nullable().default(null),
 }).refine((t) => t.ageMax >= t.ageMin, 'Tuổi tối đa phải lớn hơn hoặc bằng tuổi tối thiểu')
   // Tự chọn vị trí mà không tick nền tảng nào = quảng cáo không hiển thị ở đâu.
   .refine((t) => t.placements.automatic || (t.placements.publisherPlatforms?.length ?? 0) > 0,
-    'Tự chọn vị trí thì phải chọn ít nhất một nền tảng');
+    'Tự chọn vị trí thì phải chọn ít nhất một nền tảng')
+  // Mẫu Chuyển đổi thiếu pixel sẽ hỏng ở bước adset — tức là SAU khi chiến dịch
+  // đã được tạo trên Facebook và phải đi dọn. Chặn ngay từ lúc lưu.
+  .refine((t) => t.objective !== 'sales' || !!t.pixelId,
+    'Mục tiêu Chuyển đổi phải chọn pixel')
+  .refine((t) => t.objective !== 'sales' || (!!t.conversionEvent && isConversionEvent(t.conversionEvent)),
+    'Mục tiêu Chuyển đổi phải chọn sự kiện chuyển đổi dùng được');
 
 export async function GET() {
   const user = await requireUser();

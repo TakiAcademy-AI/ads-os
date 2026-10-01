@@ -5,6 +5,7 @@
 
 import { db } from '../db';
 import type { Interest, GeoLocation, Placements, TargetingSpec } from '../ads/targeting';
+import type { AdObjective } from '../ads/objectives';
 
 export interface AdTemplate {
   id: string;
@@ -20,6 +21,11 @@ export interface AdTemplate {
   locations: GeoLocation[];
   placements: Placements;
   advantageAudience: boolean;
+  /** engagement | messages | sales — xem ../ads/objectives.ts */
+  objective: AdObjective;
+  /** Chỉ có giá trị khi objective = 'sales'. */
+  pixelId: string | null;
+  conversionEvent: string | null;
   createdAt: string;
 }
 
@@ -50,13 +56,17 @@ function toTemplate(r: Record<string, unknown>): AdTemplate {
     locations: (r.locations as GeoLocation[] | null) ?? [],
     placements: (r.placements as Placements | null) ?? { automatic: true },
     advantageAudience: r.advantage_audience === true,
+    objective: (r.objective as AdObjective | null) ?? 'engagement',
+    pixelId: (r.pixel_id as string | null) ?? null,
+    conversionEvent: (r.conversion_event as string | null) ?? null,
     createdAt: new Date(r.created_at as string).toISOString(),
   };
 }
 
 export async function listTemplates(ownerId: string): Promise<AdTemplate[]> {
   const { rows } = await db.query(
-    `SELECT id, name, countries, age_min, age_max, daily_budget_micros, genders, interests, locations, placements, advantage_audience, created_at
+    `SELECT id, name, countries, age_min, age_max, daily_budget_micros, genders, interests, locations, placements, advantage_audience,
+            objective, pixel_id, conversion_event, created_at
      FROM ad_template WHERE owner_id = $1 ORDER BY name`,
     [ownerId],
   );
@@ -66,7 +76,8 @@ export async function listTemplates(ownerId: string): Promise<AdTemplate[]> {
 /** Null nếu không tồn tại hoặc không thuộc người gọi. */
 export async function getTemplate(ownerId: string, id: string): Promise<AdTemplate | null> {
   const { rows } = await db.query(
-    `SELECT id, name, countries, age_min, age_max, daily_budget_micros, genders, interests, locations, placements, advantage_audience, created_at
+    `SELECT id, name, countries, age_min, age_max, daily_budget_micros, genders, interests, locations, placements, advantage_audience,
+            objective, pixel_id, conversion_event, created_at
      FROM ad_template WHERE id = $2 AND owner_id = $1`,
     [ownerId, id],
   );
@@ -84,17 +95,22 @@ export interface TemplateInput {
   locations: GeoLocation[];
   placements: Placements;
   advantageAudience: boolean;
+  objective: AdObjective;
+  pixelId: string | null;
+  conversionEvent: string | null;
 }
 
 export async function createTemplate(ownerId: string, input: TemplateInput): Promise<string> {
   const { rows } = await db.query(
     `INSERT INTO ad_template
        (owner_id, name, countries, age_min, age_max, daily_budget_micros,
-        genders, interests, locations, placements, advantage_audience)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11) RETURNING id`,
+        genders, interests, locations, placements, advantage_audience,
+        objective, pixel_id, conversion_event)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12,$13,$14) RETURNING id`,
     [ownerId, input.name, input.countries, input.ageMin, input.ageMax, input.dailyBudgetMicros,
      input.genders, JSON.stringify(input.interests), JSON.stringify(input.locations),
-     JSON.stringify(input.placements), input.advantageAudience],
+     JSON.stringify(input.placements), input.advantageAudience,
+     input.objective, input.pixelId, input.conversionEvent],
   );
   return rows[0].id as string;
 }
@@ -106,11 +122,13 @@ export async function updateTemplate(
     `UPDATE ad_template
      SET name=$3, countries=$4, age_min=$5, age_max=$6, daily_budget_micros=$7,
          genders=$8, interests=$9::jsonb, locations=$10::jsonb, placements=$11::jsonb,
-         advantage_audience=$12, updated_at=NOW()
+         advantage_audience=$12, objective=$13, pixel_id=$14, conversion_event=$15,
+         updated_at=NOW()
      WHERE id=$2 AND owner_id=$1`,
     [ownerId, id, input.name, input.countries, input.ageMin, input.ageMax, input.dailyBudgetMicros,
      input.genders, JSON.stringify(input.interests), JSON.stringify(input.locations),
-     JSON.stringify(input.placements), input.advantageAudience],
+     JSON.stringify(input.placements), input.advantageAudience,
+     input.objective, input.pixelId, input.conversionEvent],
   );
   return (rowCount ?? 0) > 0;
 }

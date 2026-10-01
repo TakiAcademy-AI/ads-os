@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Interest, GeoLocation, Placements, TargetingSpec } from '@/lib/ads/targeting';
+import { OBJECTIVE, AD_OBJECTIVES, CONVERSION_EVENTS, type AdObjective } from '@/lib/ads/objectives';
 
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '9px 12px', fontSize: 13.5, fontFamily: 'inherit',
@@ -192,6 +193,113 @@ function Toggle({ on, label, onClick }: { on: boolean; label: string; onClick: (
   );
 }
 
+interface Pixel { id: string; name: string; last_fired_time?: string }
+
+/**
+ * Chọn mục tiêu chiến dịch, và những thứ chỉ mục tiêu đó mới cần.
+ *
+ * Pixel nạp lười — chỉ gọi Facebook khi người dùng thật sự chọn Chuyển đổi.
+ * Phần lớn mẫu là Tin nhắn hoặc Tương tác, nạp sẵn là tốn một lượt gọi API cho
+ * mọi lần mở form.
+ */
+export function ObjectiveFields({
+  objective, pixelId, conversionEvent, onChange,
+}: {
+  objective: AdObjective;
+  pixelId: string | null;
+  conversionEvent: string | null;
+  onChange: (v: { objective: AdObjective; pixelId: string | null; conversionEvent: string | null }) => void;
+}) {
+  const [pixels, setPixels] = useState<Pixel[] | null>(null);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    if (objective !== 'sales' || pixels !== null) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/targeting/pixels');
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) { setErr(json.error ?? 'Không đọc được pixel'); setPixels([]); }
+        else { setErr(''); setPixels(json.pixels ?? []); }
+      } catch { setErr('Không gọi được Facebook'); setPixels([]); }
+    })();
+  }, [objective, pixels]);
+
+  return (
+    <>
+      <div>
+        <div style={labelStyle}>Mục tiêu chiến dịch</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {AD_OBJECTIVES.map((o) => (
+            <Toggle key={o} label={OBJECTIVE[o].label} on={objective === o}
+                    onClick={() => onChange({
+                      objective: o,
+                      // Đổi khỏi Chuyển đổi thì bỏ pixel — giữ lại là lưu rác
+                      // vào mẫu và người đọc sau tưởng nó có tác dụng.
+                      pixelId: o === 'sales' ? pixelId : null,
+                      conversionEvent: o === 'sales' ? conversionEvent : null,
+                    })} />
+          ))}
+        </div>
+        <div style={{ fontSize: 11.5, color: 'var(--dim)', marginTop: 6 }}>
+          {OBJECTIVE[objective].hint}
+        </div>
+      </div>
+
+      {objective === 'sales' && (
+        <div style={{
+          display: 'grid', gap: 9, padding: '11px 12px',
+          border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', background: 'var(--card)',
+        }}>
+          <div>
+            <div style={labelStyle}>Pixel</div>
+            {pixels === null ? (
+              <div style={{ fontSize: 13, color: 'var(--dim)' }}>đang nạp…</div>
+            ) : pixels.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--red)' }}>
+                {err || 'Tài khoản này chưa có pixel nào. Tạo pixel trong Trình quản lý sự kiện '
+                  + 'của Facebook và gắn lên website trước đã.'}
+              </div>
+            ) : (
+              <select style={inputStyle} value={pixelId ?? ''}
+                      onChange={(e) => onChange({
+                        objective, conversionEvent, pixelId: e.target.value || null,
+                      })}>
+                <option value="">— chọn pixel —</option>
+                {pixels.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}{p.last_fired_time
+                      ? ` · lần cuối nhận dữ liệu ${p.last_fired_time.slice(0, 10)}`
+                      : ' · CHƯA từng nhận dữ liệu'}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div>
+            <div style={labelStyle}>Sự kiện chuyển đổi</div>
+            <select style={inputStyle} value={conversionEvent ?? ''}
+                    onChange={(e) => onChange({
+                      objective, pixelId, conversionEvent: e.target.value || null,
+                    })}>
+              <option value="">— chọn sự kiện —</option>
+              {CONVERSION_EVENTS.map((e) => (
+                <option key={e.value} value={e.value}>{e.label}</option>
+              ))}
+            </select>
+            <div style={{ fontSize: 11.5, color: 'var(--dim)', marginTop: 5 }}>
+              Facebook sẽ tìm người có khả năng làm đúng hành động này. Chọn sự
+              kiện mà pixel của bạn thật sự đang ghi nhận — chọn sự kiện chưa bao
+              giờ xảy ra thì quảng cáo không phân phối được.
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export interface TargetingDraft {
   genders: number[];
   interests: Interest[];
@@ -354,7 +462,9 @@ export function TargetingFields({
  * Cố ý đợi 700ms — lâu hơn ô tìm kiếm — vì mỗi lần đổi một nút giới tính là
  * một lượt gọi Facebook, và người dùng thường bấm liền mấy nút.
  */
-export function ReachEstimate({ spec }: { spec: TargetingSpec }) {
+export function ReachEstimate(
+  { spec, objective }: { spec: TargetingSpec; objective: AdObjective },
+) {
   const [state, setState] = useState<
     { kind: 'idle' | 'busy' } | { kind: 'ok'; lower: number; upper: number }
     | { kind: 'err'; message: string }
@@ -363,7 +473,7 @@ export function ReachEstimate({ spec }: { spec: TargetingSpec }) {
 
   // Chuỗi hoá để useEffect so sánh được theo giá trị — spec là object mới mỗi
   // lần render, so sánh theo tham chiếu sẽ gọi API vô tận.
-  const key = JSON.stringify(spec);
+  const key = JSON.stringify({ ...spec, objective });
 
   useEffect(() => {
     const mine = ++seq.current;

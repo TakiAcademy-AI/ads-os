@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { AdTemplate } from '@/lib/queries/templates';
-import { TargetingFields, ReachEstimate, type TargetingDraft } from './targeting-fields';
+import { TargetingFields, ReachEstimate, ObjectiveFields, type TargetingDraft } from './targeting-fields';
+import { OBJECTIVE, type AdObjective } from '@/lib/ads/objectives';
 
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '9px 12px', fontSize: 13.5, fontFamily: 'inherit',
@@ -23,6 +24,9 @@ const COUNTRIES = [
 interface Draft extends TargetingDraft {
   id?: string;
   name: string;
+  objective: AdObjective;
+  pixelId: string | null;
+  conversionEvent: string | null;
   countries: string[];
   ageMin: number;
   ageMax: number;
@@ -33,6 +37,7 @@ const BLANK: Draft = {
   name: '', countries: ['VN'], ageMin: 18, ageMax: 65, budget: 50_000,
   genders: [], interests: [], locations: [],
   placements: { automatic: true }, advantageAudience: false,
+  objective: 'engagement', pixelId: null, conversionEvent: null,
 };
 
 function toDraft(t: AdTemplate): Draft {
@@ -42,6 +47,7 @@ function toDraft(t: AdTemplate): Draft {
     budget: Math.round(t.dailyBudgetMicros / 1_000_000),
     genders: t.genders, interests: t.interests, locations: t.locations,
     placements: t.placements, advantageAudience: t.advantageAudience,
+    objective: t.objective, pixelId: t.pixelId, conversionEvent: t.conversionEvent,
   };
 }
 
@@ -79,6 +85,9 @@ export function TemplateBrowser({ templates }: { templates: AdTemplate[] }) {
       locations: draft.locations,
       placements: draft.placements,
       advantageAudience: draft.advantageAudience,
+      objective: draft.objective,
+      pixelId: draft.pixelId,
+      conversionEvent: draft.conversionEvent,
     };
     const res = await fetch(draft.id ? `/api/templates/${draft.id}` : '/api/templates', {
       method: draft.id ? 'PUT' : 'POST',
@@ -130,6 +139,10 @@ export function TemplateBrowser({ templates }: { templates: AdTemplate[] }) {
                      onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
             </div>
 
+            <ObjectiveFields objective={draft.objective} pixelId={draft.pixelId}
+                             conversionEvent={draft.conversionEvent}
+                             onChange={(v) => setDraft({ ...draft, ...v })} />
+
             <div>
               <div style={{ fontSize: 11.5, color: 'var(--dim)', marginBottom: 6 }}>Quốc gia</div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap',
@@ -175,13 +188,15 @@ export function TemplateBrowser({ templates }: { templates: AdTemplate[] }) {
               ageMin: draft.ageMin, ageMax: draft.ageMax, genders: draft.genders,
               interests: draft.interests, placements: draft.placements,
               advantageAudience: draft.advantageAudience,
-            }} />
+            }} objective={draft.objective} />
 
             <div style={{ display: 'flex', gap: 9 }}>
               <button className="btn" onClick={save}
                       disabled={busy || !draft.name.trim() || draft.ageMax < draft.ageMin
                                 || (!draft.placements.automatic
-                                    && (draft.placements.publisherPlatforms?.length ?? 0) === 0)}>
+                                    && (draft.placements.publisherPlatforms?.length ?? 0) === 0)
+                                || (draft.objective === 'sales'
+                                    && (!draft.pixelId || !draft.conversionEvent))}>
                 {busy ? 'Đang lưu…' : draft.id ? 'Lưu thay đổi' : 'Tạo mẫu'}
               </button>
               <button className="btn btn-ghost" onClick={() => { setDraft(null); setError(''); }}>
@@ -205,6 +220,7 @@ export function TemplateBrowser({ templates }: { templates: AdTemplate[] }) {
           <thead>
             <tr>
               <th>Tên mẫu</th>
+              <th>Mục tiêu</th>
               <th>Nhắm đối tượng</th>
               <th>Tuổi</th>
               <th className="n">Ngân sách/ngày</th>
@@ -215,6 +231,9 @@ export function TemplateBrowser({ templates }: { templates: AdTemplate[] }) {
             {templates.map((t) => (
               <tr key={t.id}>
                 <td><div className="cell-title">{t.name}</div></td>
+                <td style={{ color: 'var(--ink-2)', fontSize: 12.5 }}>
+                  {OBJECTIVE[t.objective].label}
+                </td>
                 <td style={{ color: 'var(--ink-2)', fontSize: 12.5 }}>{summarize(t)}</td>
                 <td className="mono" style={{ color: 'var(--ink-2)' }}>{t.ageMin}–{t.ageMax}</td>
                 <td className="n mono">{t.dailyBudgetMicros / 1_000_000 >= 1
