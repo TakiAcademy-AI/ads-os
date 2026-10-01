@@ -11,7 +11,24 @@ export const TemplateBody = z.object({
   ageMin: z.number().int().min(13).max(65),
   ageMax: z.number().int().min(13).max(65),
   dailyBudgetMicros: z.number().int().positive(),
-}).refine((t) => t.ageMax >= t.ageMin, 'Tuổi tối đa phải lớn hơn hoặc bằng tuổi tối thiểu');
+  // Quy ước Facebook: 1=nam, 2=nữ. Mảng rỗng = mọi giới. Chỉ nhận 0 hoặc 1
+  // phần tử — chọn cả hai giới chính là để rỗng.
+  genders: z.array(z.union([z.literal(1), z.literal(2)])).max(1).default([]),
+  interests: z.array(z.object({ id: z.string(), name: z.string() })).max(50).default([]),
+  locations: z.array(z.object({
+    type: z.enum(['city', 'region']), key: z.string(), name: z.string(),
+  })).max(50).default([]),
+  placements: z.object({
+    automatic: z.boolean(),
+    publisherPlatforms: z.array(z.string()).optional(),
+    facebookPositions: z.array(z.string()).optional(),
+    instagramPositions: z.array(z.string()).optional(),
+  }).default({ automatic: true }),
+  advantageAudience: z.boolean().default(false),
+}).refine((t) => t.ageMax >= t.ageMin, 'Tuổi tối đa phải lớn hơn hoặc bằng tuổi tối thiểu')
+  // Tự chọn vị trí mà không tick nền tảng nào = quảng cáo không hiển thị ở đâu.
+  .refine((t) => t.placements.automatic || (t.placements.publisherPlatforms?.length ?? 0) > 0,
+    'Tự chọn vị trí thì phải chọn ít nhất một nền tảng');
 
 export async function GET() {
   const user = await requireUser();

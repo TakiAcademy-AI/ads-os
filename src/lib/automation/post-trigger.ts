@@ -18,7 +18,8 @@ import { readToken } from '../ads/token';
 import { readPageToken, fetchRecentPosts } from '../ads/pages';
 import { createBoostCampaign, cleanupPartial, AdCreateError } from '../ads/facebook-create';
 import { safeParams } from '../configs/schema';
-import { getTemplate } from '../queries/templates';
+import { getTemplate, templateToTargeting } from '../queries/templates';
+import type { TargetingSpec } from '../ads/targeting';
 
 export interface PostTriggerResult {
   scanned: number;
@@ -116,21 +117,21 @@ export async function runPostTrigger(
   // Mẫu quảng cáo đè lên tham số khai sẵn. Mẫu bị xoá thì quay về tham số cũ
   // chứ không làm cấu hình chết — ghi chú lại để người dùng biết vì sao số
   // nhắm đối tượng khác với lúc họ đặt.
-  let targeting = {
-    dailyBudgetMicros: p.dailyBudgetMicros,
-    countries: p.countries,
-    ageMin: p.ageMin,
-    ageMax: p.ageMax,
+  //
+  // Không có mẫu thì dựng khối targeting tối thiểu từ params. Cấu hình tạo
+  // trước khi có mẫu quảng cáo vẫn chạy y như cũ: quốc gia + khoảng tuổi, mọi
+  // giới, mọi vị trí.
+  let budgetMicros = p.dailyBudgetMicros;
+  let targeting: TargetingSpec = {
+    countries: p.countries, locations: [], ageMin: p.ageMin, ageMax: p.ageMax,
+    genders: [], interests: [], placements: { automatic: true },
+    advantageAudience: false,
   };
   if (p.templateId) {
     const tpl = await getTemplate(ownerId, p.templateId);
     if (tpl) {
-      targeting = {
-        dailyBudgetMicros: tpl.dailyBudgetMicros,
-        countries: tpl.countries,
-        ageMin: tpl.ageMin,
-        ageMax: tpl.ageMax,
-      };
+      budgetMicros = tpl.dailyBudgetMicros;
+      targeting = templateToTargeting(tpl);
     } else {
       out.notes.push('Mẫu quảng cáo đã bị xoá — dùng tham số khai trong cấu hình');
     }
@@ -166,7 +167,7 @@ export async function runPostTrigger(
        ON CONFLICT (ad_account_id, idempotency_key) DO NOTHING
        RETURNING id`,
       [adAccountId, post.id, name, p.mode,
-       `PAUSED · ${Math.round(targeting.dailyBudgetMicros / 1_000_000).toLocaleString('vi-VN')}đ/ngày`,
+       `PAUSED · ${Math.round(budgetMicros / 1_000_000).toLocaleString('vi-VN')}đ/ngày`,
        reason, `posttrigger:${configId}:${post.id}`],
     );
     const mutationId = mut[0]?.id as string | undefined;
@@ -187,10 +188,8 @@ export async function runPostTrigger(
         postId: post.id,
         campaignName: name,
         currency,
-        dailyBudgetMicros: targeting.dailyBudgetMicros,
-        countries: targeting.countries,
-        ageMin: targeting.ageMin,
-        ageMax: targeting.ageMax,
+        dailyBudgetMicros: budgetMicros,
+        targeting,
       });
 
       await db.query(

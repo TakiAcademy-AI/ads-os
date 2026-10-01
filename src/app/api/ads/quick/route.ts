@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireWriter } from '@/lib/session';
 import { db } from '@/lib/db';
 import { readToken } from '@/lib/ads/token';
-import { getTemplate } from '@/lib/queries/templates';
+import { getTemplate, templateToTargeting } from '@/lib/queries/templates';
 import {
   createBoostCampaign, validateBoostCampaign, cleanupPartial, AdCreateError,
 } from '@/lib/ads/facebook-create';
@@ -53,9 +53,7 @@ export async function POST(req: Request) {
     campaignName: b.campaignName,
     currency: acct[0].currency as string,
     dailyBudgetMicros: tpl.dailyBudgetMicros,
-    countries: tpl.countries,
-    ageMin: tpl.ageMin,
-    ageMax: tpl.ageMax,
+    targeting: templateToTargeting(tpl),
   };
 
   // Kiểm trước: Facebook trả lỗi y như thật nhưng không tạo object nào, và

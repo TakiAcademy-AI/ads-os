@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { AdTemplate } from '@/lib/queries/templates';
+import { TargetingFields, ReachEstimate, type TargetingDraft } from './targeting-fields';
 
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '9px 12px', fontSize: 13.5, fontFamily: 'inherit',
@@ -19,7 +20,7 @@ const COUNTRIES = [
   { code: 'MY', label: 'Malaysia' },
 ];
 
-interface Draft {
+interface Draft extends TargetingDraft {
   id?: string;
   name: string;
   countries: string[];
@@ -28,7 +29,34 @@ interface Draft {
   budget: number;   // đồng, không phải micros — người dùng gõ số thật
 }
 
-const BLANK: Draft = { name: '', countries: ['VN'], ageMin: 18, ageMax: 65, budget: 50_000 };
+const BLANK: Draft = {
+  name: '', countries: ['VN'], ageMin: 18, ageMax: 65, budget: 50_000,
+  genders: [], interests: [], locations: [],
+  placements: { automatic: true }, advantageAudience: false,
+};
+
+function toDraft(t: AdTemplate): Draft {
+  return {
+    id: t.id, name: t.name, countries: t.countries,
+    ageMin: t.ageMin, ageMax: t.ageMax,
+    budget: Math.round(t.dailyBudgetMicros / 1_000_000),
+    genders: t.genders, interests: t.interests, locations: t.locations,
+    placements: t.placements, advantageAudience: t.advantageAudience,
+  };
+}
+
+/** Mô tả nhắm đối tượng gọn một dòng cho bảng danh sách. */
+function summarize(t: AdTemplate): string {
+  const parts: string[] = [];
+  parts.push(t.locations.length
+    ? t.locations.map((l) => l.name).join(', ')
+    : t.countries.map((c) => COUNTRIES.find((x) => x.code === c)?.label ?? c).join(', '));
+  if (t.genders.length === 1) parts.push(t.genders[0] === 1 ? 'nam' : 'nữ');
+  if (t.interests.length) parts.push(`${t.interests.length} sở thích`);
+  if (!t.placements.automatic) parts.push('vị trí tự chọn');
+  if (t.advantageAudience) parts.push('mở rộng');
+  return parts.join(' · ');
+}
 
 export function TemplateBrowser({ templates }: { templates: AdTemplate[] }) {
   const router = useRouter();
@@ -46,6 +74,11 @@ export function TemplateBrowser({ templates }: { templates: AdTemplate[] }) {
       ageMin: draft.ageMin,
       ageMax: draft.ageMax,
       dailyBudgetMicros: Math.round(draft.budget * 1_000_000),
+      genders: draft.genders,
+      interests: draft.interests,
+      locations: draft.locations,
+      placements: draft.placements,
+      advantageAudience: draft.advantageAudience,
     };
     const res = await fetch(draft.id ? `/api/templates/${draft.id}` : '/api/templates', {
       method: draft.id ? 'PUT' : 'POST',
@@ -99,7 +132,8 @@ export function TemplateBrowser({ templates }: { templates: AdTemplate[] }) {
 
             <div>
               <div style={{ fontSize: 11.5, color: 'var(--dim)', marginBottom: 6 }}>Quốc gia</div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap',
+                            opacity: draft.locations.length ? 0.45 : 1 }}>
                 {COUNTRIES.map((c) => (
                   <button key={c.code} type="button" onClick={() => toggleCountry(c.code)}
                           className={draft.countries.includes(c.code) ? 'btn' : 'btn btn-ghost'}
@@ -108,6 +142,12 @@ export function TemplateBrowser({ templates }: { templates: AdTemplate[] }) {
                   </button>
                 ))}
               </div>
+              {draft.locations.length > 0 && (
+                <div style={{ fontSize: 11.5, color: 'var(--dim)', marginTop: 6 }}>
+                  Đang bỏ qua vì bạn đã chọn tỉnh/thành bên dưới. Bỏ hết tỉnh/thành
+                  thì quay lại nhắm theo quốc gia.
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.4fr', gap: 9 }}>
@@ -128,9 +168,20 @@ export function TemplateBrowser({ templates }: { templates: AdTemplate[] }) {
               </div>
             </div>
 
+            <TargetingFields value={draft} onChange={(v) => setDraft({ ...draft, ...v })} />
+
+            <ReachEstimate spec={{
+              countries: draft.countries, locations: draft.locations,
+              ageMin: draft.ageMin, ageMax: draft.ageMax, genders: draft.genders,
+              interests: draft.interests, placements: draft.placements,
+              advantageAudience: draft.advantageAudience,
+            }} />
+
             <div style={{ display: 'flex', gap: 9 }}>
               <button className="btn" onClick={save}
-                      disabled={busy || !draft.name.trim() || draft.ageMax < draft.ageMin}>
+                      disabled={busy || !draft.name.trim() || draft.ageMax < draft.ageMin
+                                || (!draft.placements.automatic
+                                    && (draft.placements.publisherPlatforms?.length ?? 0) === 0)}>
                 {busy ? 'Đang lưu…' : draft.id ? 'Lưu thay đổi' : 'Tạo mẫu'}
               </button>
               <button className="btn btn-ghost" onClick={() => { setDraft(null); setError(''); }}>
@@ -154,7 +205,7 @@ export function TemplateBrowser({ templates }: { templates: AdTemplate[] }) {
           <thead>
             <tr>
               <th>Tên mẫu</th>
-              <th>Quốc gia</th>
+              <th>Nhắm đối tượng</th>
               <th>Tuổi</th>
               <th className="n">Ngân sách/ngày</th>
               <th className="n">Thao tác</th>
@@ -164,9 +215,7 @@ export function TemplateBrowser({ templates }: { templates: AdTemplate[] }) {
             {templates.map((t) => (
               <tr key={t.id}>
                 <td><div className="cell-title">{t.name}</div></td>
-                <td style={{ color: 'var(--ink-2)', fontSize: 12.5 }}>
-                  {t.countries.map((c) => COUNTRIES.find((x) => x.code === c)?.label ?? c).join(', ')}
-                </td>
+                <td style={{ color: 'var(--ink-2)', fontSize: 12.5 }}>{summarize(t)}</td>
                 <td className="mono" style={{ color: 'var(--ink-2)' }}>{t.ageMin}–{t.ageMax}</td>
                 <td className="n mono">{t.dailyBudgetMicros / 1_000_000 >= 1
                   ? `${Math.round(t.dailyBudgetMicros / 1_000_000).toLocaleString('vi-VN')}đ` : '—'}</td>
@@ -174,11 +223,7 @@ export function TemplateBrowser({ templates }: { templates: AdTemplate[] }) {
                   <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end' }}>
                     <button className="btn btn-ghost" disabled={busy}
                             style={{ fontSize: 12, padding: '5px 11px' }}
-                            onClick={() => setDraft({
-                              id: t.id, name: t.name, countries: t.countries,
-                              ageMin: t.ageMin, ageMax: t.ageMax,
-                              budget: Math.round(t.dailyBudgetMicros / 1_000_000),
-                            })}>
+                            onClick={() => setDraft(toDraft(t))}>
                       Sửa
                     </button>
                     <button className="btn btn-ghost" disabled={busy}

@@ -8,6 +8,7 @@
 // trước đã tạo rồi — hàm trả về những gì đã tạo để nơi gọi ghi nhật ký và dọn.
 
 import { microsToMinor } from './currency';
+import { buildTargeting, type TargetingSpec } from './targeting';
 
 const GRAPH = 'https://graph.facebook.com';
 const VERSION = process.env.FB_API_VERSION || 'v23.0';
@@ -39,8 +40,14 @@ export interface BoostSpec {
   postId: string;
   campaignName: string;
   dailyBudgetMicros: number;
-  /** Mã quốc gia ISO, vd ['VN']. */
-  countries: string[];
+  /**
+   * Nhắm đối tượng đầy đủ.
+   *
+   * Trước đây chỉ có quốc gia và khoảng tuổi. Đối chiếu với nhóm quảng cáo
+   * thật trong tài khoản người dùng cho thấy thiếu giới tính, sở thích và vị
+   * trí hiển thị — boost cho toàn bộ dân số 18–65 cả nước thì CPA chắc chắn xấu.
+   */
+  targeting: TargetingSpec;
   /**
    * Tiền tệ của tài khoản quảng cáo.
    *
@@ -49,8 +56,6 @@ export interface BoostSpec {
    * facebook-write.ts, nên ở đây khai bắt buộc chứ không để mặc định.
    */
   currency: string;
-  ageMin: number;
-  ageMax: number;
 }
 
 async function post<T>(
@@ -177,18 +182,11 @@ export async function createBoostCampaign(token: string, spec: BoostSpec): Promi
     // Page nào — nhưng với POST_ENGAGEMENT thì Facebook từ chối thẳng:
     // "không thể dùng mục tiêu hiệu quả đã chọn cho mục tiêu chiến dịch".
     // promoted_object{page_id} chỉ dành cho PAGE_LIKES.
-    targeting: JSON.stringify({
-      geo_locations: { countries: spec.countries },
-      age_min: spec.ageMin,
-      age_max: spec.ageMax,
-      // Bắt buộc từ v23: phải khai rõ có cho Facebook tự nới đối tượng không.
-      //
-      // Đặt 0 = giữ đúng đối tượng người dùng khai. Bật lên thì Facebook được
-      // phép phân phối ra ngoài khoảng tuổi và khu vực đã chọn — cùng lý do với
-      // is_adset_budget_sharing_enabled: không để nền tảng tự lệch khỏi con số
-      // người dùng đặt khi đang tiêu tiền của họ.
-      targeting_automation: { advantage_audience: 0 },
-    }),
+    // buildTargeting lo phần khó: tỉnh/thành thay thế quốc gia chứ không cộng
+    // thêm, giới tính rỗng thì BỎ trường thay vì gửi mảng rỗng, và vị trí tự
+    // động thì không gửi trường vị trí nào. Xem ghi chú ở targeting.ts —
+    // gửi sai kiểu nào trong ba kiểu đó đều hỏng im lặng.
+    targeting: JSON.stringify(buildTargeting(spec.targeting)),
     status: 'PAUSED',
   }, token, 'adset', created);
   created.adsetId = adset.id;

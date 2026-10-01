@@ -52,6 +52,7 @@ function Q({ q, children }: { q: string; children: React.ReactNode }) {
 const NAV = [
   { id: 'bat-dau', label: 'Ba bước bắt đầu' },
   { id: 'attribution', label: 'Vì sao tắt theo CPA là tắt oan' },
+  { id: 'nham-doi-tuong', label: 'Nhắm đối tượng trong mẫu' },
   { id: 'bon-loai', label: 'Bốn loại tự động hoá' },
   { id: 'chay-thu', label: 'Chạy thử trước khi ghi thật' },
   { id: 'bao-ve', label: 'Những lớp chặn an toàn' },
@@ -133,6 +134,46 @@ export default async function GuidePage() {
               attribution đo được&rdquo; tính từ chính lịch sử số liệu tài khoản bạn.
               Cần vài tuần đồng bộ mới đủ mẫu.
             </div>
+          </Section>
+
+          <Section id="nham-doi-tuong" title="Nhắm đối tượng trong mẫu">
+            <p style={{ margin: '0 0 12px' }}>
+              <Link href="/mau-quang-cao" style={{ color: 'var(--acc-ink)', textDecoration: 'underline' }}>Mẫu quảng cáo</Link> giữ
+              phần nhắm đối tượng và ngân sách dùng chung cho cả hai đường tạo quảng
+              cáo: bấm tay ở <b>Đăng quảng cáo</b> và cấu hình <b>Tự động chạy ads</b>.
+              Sửa mẫu một lần là cả hai đổi theo.
+            </p>
+            <p style={{ margin: '0 0 12px' }}>
+              Có bốn chỗ dễ hiểu sai, và cả bốn đều <b>hỏng im lặng</b> — Facebook
+              không báo lỗi, chỉ phân phối khác ý bạn:
+            </p>
+            <ul style={{ paddingLeft: 20, margin: '0 0 12px' }}>
+              <li style={{ marginBottom: 7 }}>
+                <b>Tỉnh/thành thay thế quốc gia, không cộng thêm.</b> Chọn Hà Nội thì
+                phần Quốc gia bị bỏ qua — nếu gửi kèm cả nước thì hoá ra nhắm cả nước,
+                đúng cái bạn vừa cố thu hẹp.
+              </li>
+              <li style={{ marginBottom: 7 }}>
+                <b>Mọi giới nghĩa là không gửi gì.</b> Gửi danh sách giới tính rỗng
+                lên Facebook là &ldquo;không ai cả&rdquo;, không phải &ldquo;tất cả&rdquo;.
+              </li>
+              <li style={{ marginBottom: 7 }}>
+                <b>Vị trí tự động thường rẻ hơn tự chọn.</b> Chỉ tự chọn khi có lý do
+                cụ thể. Tự chọn mà không tick nền tảng nào thì quảng cáo không hiện ở
+                đâu cả — ô lưu sẽ khoá lại.
+              </li>
+              <li>
+                <b>Mở rộng đối tượng cho Facebook đi ra ngoài tuổi và sở thích bạn khai.</b>
+                {' '}Giới hạn tỉnh/thành vẫn giữ. Mặc định tắt vì thứ bạn khai phải được
+                tôn trọng.
+              </li>
+            </ul>
+            <p style={{ margin: 0 }}>
+              Dòng <b>tiếp cận ước tính</b> dưới mỗi mẫu là số của Facebook, cập nhật
+              theo từng lựa chọn. Dùng nó để so rộng/hẹp, đừng đọc như số người sẽ
+              thấy quảng cáo. Dưới khoảng mười nghìn người là hẹp tới mức Facebook
+              khó phân phối đều, ngân sách tiêu không hết mà giá mỗi kết quả lại đắt lên.
+            </p>
           </Section>
 
           <Section id="bon-loai" title="Bốn loại tự động hoá — khi nào dùng cái nào">
