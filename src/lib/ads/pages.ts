@@ -6,6 +6,7 @@
 // không báo lỗi, rất giống "Page không có bài nào".
 
 import { db } from '../db';
+import type { PostDetail } from './post-fitness';
 
 const GRAPH = 'https://graph.facebook.com';
 const VERSION = process.env.FB_API_VERSION || 'v23.0';
@@ -126,4 +127,59 @@ export async function fetchRecentPosts(pageToken: string, pageId: string, limit 
     createdTime: p.created_time,
     permalink: p.permalink_url ?? null,
   }));
+}
+
+/**
+ * Bài viết kèm đủ trường để đánh giá mức phù hợp với từng mục tiêu quảng cáo.
+ *
+ * Tách khỏi fetchRecentPosts vì nặng hơn hẳn: thêm attachments và hai phép đếm
+ * tổng hợp. Luồng chỉ cần chọn bài thì dùng hàm kia.
+ *
+ * CỐ Ý không lấy is_eligible_for_promotion — đã kiểm và nó trả false cho cả
+ * những bài đang chạy quảng cáo thật. Xem ghi chú đầu post-fitness.ts.
+ *
+ * Cũng không lấy insights: Facebook đã bỏ post_impressions,
+ * post_impressions_unique và post_engaged_users ở các bản API gần đây (chỉ còn
+ * post_clicks và post_video_views), mà chúng lại tốn một lượt gọi cho MỖI bài.
+ * Đếm react/bình luận/chia sẻ lấy kèm trong một lượt là đủ để sắp thứ tự.
+ */
+export async function fetchPostsDetailed(
+  pageToken: string, pageId: string, limit = 25,
+): Promise<PostDetail[]> {
+  const fields = [
+    'id', 'message', 'created_time', 'permalink_url', 'status_type',
+    'attachments{media_type,type,unshimmed_url}',
+    'comments.summary(true).limit(0)',
+    'reactions.summary(true).limit(0)',
+    'shares',
+  ].join(',');
+
+  const url = `${GRAPH}/${VERSION}/${pageId}/published_posts`
+    + `?fields=${encodeURIComponent(fields)}&limit=${limit}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${pageToken}` },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    data?: Record<string, any>[];
+    error?: { message?: string };
+  };
+  if (json.error) throw new Error(json.error.message ?? 'Facebook từ chối');
+  if (!res.ok) throw new Error(`Facebook trả HTTP ${res.status}`);
+
+  return (json.data ?? []).map((p) => {
+    const att = p.attachments?.data?.[0];
+    return {
+      id: p.id as string,
+      message: (p.message as string) ?? '',
+      createdTime: p.created_time as string,
+      permalink: (p.permalink_url as string) ?? null,
+      statusType: (p.status_type as string) ?? null,
+      mediaType: att?.media_type ?? att?.type ?? null,
+      attachmentUrl: att?.unshimmed_url ?? null,
+      reactions: p.reactions?.summary?.total_count ?? 0,
+      comments: p.comments?.summary?.total_count ?? 0,
+      shares: p.shares?.count ?? 0,
+    };
+  });
 }

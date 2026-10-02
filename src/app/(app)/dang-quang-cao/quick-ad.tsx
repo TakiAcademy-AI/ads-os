@@ -4,11 +4,51 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { AdTemplate } from '@/lib/queries/templates';
 
+import type { PostFitness, Verdict } from '@/lib/ads/post-fitness';
+import { VERDICT_LABEL } from '@/lib/ads/post-fitness';
+import { OBJECTIVE, AD_OBJECTIVES, type AdObjective } from '@/lib/ads/objectives';
+
 interface Post {
   id: string;
   message: string;
   createdTime: string;
   permalink: string | null;
+  /** Chỉ có khi gọi kèm ?fitness=1. */
+  fitness?: PostFitness;
+  best?: AdObjective | null;
+}
+
+// Tên biến phải khớp globals.css: --grn và --amb, KHÔNG phải --green/--amber.
+// Sai tên thì CSS im lặng bỏ qua và nhãn mất màu — TypeScript không bắt được.
+const VERDICT_COLOR: Record<Verdict, string> = {
+  good: 'var(--grn)',
+  ok: 'var(--dim)',
+  warn: 'var(--amb)',
+  blocked: 'var(--red)',
+};
+
+const KIND_LABEL: Record<PostFitness['kind'], string> = {
+  reel: 'Reel', video: 'Video', photo: 'Ảnh', link: 'Link', text: 'Chữ',
+};
+
+/** Ba nhãn mục tiêu kèm kết luận, hiện dưới mỗi bài. */
+function FitnessRow({ fitness }: { fitness: PostFitness }) {
+  return (
+    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 5 }}>
+      <span style={{ fontSize: 10.5, color: 'var(--dim)' }}>
+        {KIND_LABEL[fitness.kind]} · {fitness.engagement} tương tác
+      </span>
+      {AD_OBJECTIVES.map((o) => {
+        const f = fitness.byObjective[o];
+        return (
+          <span key={o} title={f.reason}
+                style={{ fontSize: 10.5, color: VERDICT_COLOR[f.verdict], whiteSpace: 'nowrap' }}>
+            {OBJECTIVE[o].label}: {VERDICT_LABEL[f.verdict]}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 const inputStyle: React.CSSProperties = {
@@ -45,6 +85,7 @@ export function QuickAd({
   const [nameTouched, setNameTouched] = useState(false);
 
   const [posts, setPosts] = useState<Post[]>([]);
+  const [postsNote, setPostsNote] = useState<string | null>(null);
   const [loadingPosts, setLoadingPosts] = useState(false);
 
   const [busy, setBusy] = useState<'validate' | 'create' | null>(null);
@@ -53,18 +94,31 @@ export function QuickAd({
   const [created, setCreated] = useState<{ campaignId: string; adId: string } | null>(null);
 
   const post = useMemo(() => posts.find((p) => p.id === postId), [posts, postId]);
+
+  // Bài có mục tiêu nào "Phù hợp" lên trước, rồi theo tương tác. Giữ nguyên thứ
+  // tự Facebook trả về khi chưa có đánh giá.
+  const sortedPosts = useMemo(() => {
+    if (!posts.some((p) => p.fitness)) return posts;
+    return [...posts].sort((a, b) => {
+      const ra = a.best ? 0 : 1;
+      const rb = b.best ? 0 : 1;
+      if (ra !== rb) return ra - rb;
+      return (b.fitness?.engagement ?? 0) - (a.fitness?.engagement ?? 0);
+    });
+  }, [posts]);
   const template = useMemo(() => templates.find((t) => t.id === templateId), [templates, templateId]);
 
   useEffect(() => {
-    if (!pageId) { setPosts([]); setPostId(''); return; }
+    if (!pageId) { setPosts([]); setPostsNote(null); setPostId(''); return; }
     setLoadingPosts(true);
     setError('');
     setPostId('');
-    fetch(`/api/pages/${pageId}/posts`)
+    fetch(`/api/pages/${pageId}/posts?fitness=1`)
       .then(async (r) => {
         const d = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(d.error ?? 'Không đọc được bài viết');
         setPosts(d.posts ?? []);
+        setPostsNote(d.note ?? null);
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoadingPosts(false));
@@ -183,7 +237,7 @@ export function QuickAd({
           </Field>
 
           <Field label="Bài viết cần đẩy"
-                 hint="Quảng cáo trỏ thẳng vào bài có sẵn, không tạo nội dung mới.">
+                 hint="Kết luận bên dưới mỗi bài là của Ads OS tự xét, không phải Facebook duyệt trước — trỏ chuột vào để xem lý do.">
             {!pageId ? (
               <div style={{ fontSize: 12.5, color: 'var(--dim)' }}>Chọn Page trước.</div>
             ) : loadingPosts ? (
@@ -191,9 +245,19 @@ export function QuickAd({
             ) : posts.length === 0 ? (
               <div style={{ fontSize: 12.5, color: 'var(--dim)' }}>Page này chưa có bài nào đọc được.</div>
             ) : (
+              <>
+                {postsNote && (
+                  <div style={{
+                    fontSize: 11.5, color: 'var(--amb)', background: 'var(--amb-soft)',
+                    border: '1px solid var(--amb)', borderRadius: 'var(--r-sm)',
+                    padding: '8px 10px', marginBottom: 7, lineHeight: 1.5,
+                  }}>
+                    {postsNote}
+                  </div>
+                )}
               <div style={{ maxHeight: 280, overflowY: 'auto', border: '1px solid var(--line)',
                             borderRadius: 'var(--r-sm)' }}>
-                {posts.map((p) => {
+                {sortedPosts.map((p) => {
                   const on = p.id === postId;
                   return (
                     <button key={p.id} type="button"
@@ -210,12 +274,18 @@ export function QuickAd({
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--dim)', marginTop: 3 }}>
                         {new Date(p.createdTime).toLocaleString('vi-VN')}
-                        {p.permalink?.includes('/reel/') && ' · Reel'}
+                        {p.best && (
+                          <span style={{ color: 'var(--grn)', marginLeft: 6 }}>
+                            · nên chạy {OBJECTIVE[p.best].label}
+                          </span>
+                        )}
                       </div>
+                      {p.fitness && <FitnessRow fitness={p.fitness} />}
                     </button>
                   );
                 })}
               </div>
+              </>
             )}
           </Field>
 
