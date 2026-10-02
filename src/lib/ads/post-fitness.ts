@@ -90,16 +90,14 @@ function kindOf(p: PostDetail): PostFitness['kind'] {
 type FitInput = Omit<PostFitness, 'byObjective'> & { comments: number; median: number };
 
 function fitMessages(f: FitInput): ObjectiveFitness {
-  // [đã gặp] Chạy thật trên TAKI 002: Reel + đích MESSENGER bị Facebook từ chối
-  // ở bước tạo quảng cáo với 100/1487891 "nội dung không tương thích với mục
-  // tiêu". Mới một ca nên để mức cảnh báo, không chặn.
-  if (f.kind === 'reel') {
-    return {
-      objective: 'messages', verdict: 'warn',
-      reason: 'Reel từng bị Facebook từ chối với đích Messenger (mã 100/1487891). '
-        + 'Ảnh hoặc bài chữ an toàn hơn cho mục tiêu này.',
-    };
-  }
+  // ĐÃ BỎ luật "Reel không chạy được Tin nhắn".
+  //
+  // Reel + đích MESSENGER từng hỏng thật với 100/1487891, nhưng nguyên nhân là
+  // creative của ta thiếu nút nhắn tin chứ không phải Reel. Sau khi thêm
+  // call_to_action MESSAGE_PAGE (xem objectives.ts), đã chạy lại ĐÚNG bài Reel
+  // đó trên TK 02 bằng token System User: cả bốn bước qua hết.
+  //
+  // Giữ lại cảnh báo cũ sẽ đẩy người dùng tránh một thứ đang chạy tốt.
   // [kinh nghiệm] Bài đang có nhiều người vào bình luận hỏi là bài đã tự sinh
   // ra ý định nhắn tin — đổ tiền vào đó thường rẻ hơn bài chỉ có nhiều react.
   if (f.comments >= 2 && f.commentShare >= 0.25) {

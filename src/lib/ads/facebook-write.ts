@@ -25,22 +25,39 @@ interface GraphErr { message?: string; code?: number; error_subcode?: number }
  * Hướng dẫn cho những lỗi chỉ người dùng tự tay gỡ được, code không sửa được.
  *
  * 31/3858385 là chốt bảo mật của Meta, KHÔNG phải lỗi payload hay thiếu quyền:
- * Meta nghi truy cập lạ (IP mới — chính là VPS chạy app, tạo dồn dập qua API...)
- * nên khoá quyền tạo/sửa quảng cáo của tài khoản. Thông điệp gốc "Please
- * authenticate your account" không nói phải làm gì. Kết nối lại hay đổi token
- * KHÔNG gỡ được — chỉ xác thực trong Ads Manager mới gỡ, và thử lại liên tục
- * chỉ làm Meta nghi thêm.
+ * Meta nghi truy cập lạ (IP mới — chính là VPS chạy app, tạo dồn dập qua API…)
+ * nên khoá quyền tạo/sửa quảng cáo. Thông điệp gốc "Please authenticate your
+ * account" không nói phải làm gì.
+ *
+ * CÁCH GỠ CHẮC ĂN NHẤT: dùng token System User. Đã kiểm thật ngày 2026-10-01:
+ * cùng một tài khoản, cùng một bài Reel, token người thật thì hỏng ở bước tạo
+ * quảng cáo với 31/3858385, token System User thì chạy hết cả bốn bước. Khoá
+ * này bám vào NGƯỜI DÙNG Facebook; System User không phải người nên không có
+ * chốt xác thực nào áp lên nó.
+ *
+ * Ghi chú cũ ở đây từng viết "đổi token không gỡ được" — SAI, đã bị phép thử
+ * trên bác bỏ. Đúng là đổi sang token của một người khác thì không gỡ được,
+ * vì ai cũng là người; phải đổi sang System User.
  */
 export function fbActionHint(code?: number, subcode?: number): string | null {
   if (code === 31 && subcode === 3858385) {
     return 'Meta đang tạm khoá quyền tạo/sửa quảng cáo của tài khoản này để kiểm tra bảo mật. '
-      + 'Cách gỡ: đăng nhập Facebook bằng đúng tài khoản đã kết nối với Ads OS (dùng System '
-      + 'User token thì là admin của Business), vào Ads Manager → chọn tài khoản quảng cáo → '
-      + 'mở chỉnh sửa một nhóm quảng cáo bất kỳ → bấm "Start authentication" ở khung '
-      + '"Verifying your changes" bên phải. Không thấy nút thì xem Business Settings → '
-      + 'Security Center; khoá thường tự gỡ sau vài ngày. Đã xác thực mà vẫn lỗi thì kiểm tra '
-      + 'người kết nối có vai trò trong Business sở hữu tài khoản quảng cáo. Kết nối lại hay '
-      + 'đổi token không gỡ được lỗi này — đừng bấm thử lại liên tục.';
+      + 'Khoá này bám vào TÀI KHOẢN FACEBOOK CỦA NGƯỜI dùng để kết nối, không phải vào tài '
+      + 'khoản quảng cáo — nên đổi sang tài khoản quảng cáo khác hay nhờ người khác kết nối '
+      + 'đều không gỡ được.\n\n'
+      + 'CÁCH CHẮC ĂN NHẤT — dùng token System User (đã kiểm thật, chạy được ngay): vào '
+      + 'business.facebook.com/settings → Business sở hữu tài khoản quảng cáo → Người dùng → '
+      + 'Người dùng hệ thống → tạo một cái vai trò Quản trị viên → Thêm tài sản: gán tài khoản '
+      + 'quảng cáo (Quản lý chiến dịch) VÀ Trang (Quản lý Trang) → Tạo mã truy cập mới, chọn '
+      + 'app này, tick ads_management, ads_read, business_management, pages_show_list, '
+      + 'pages_read_engagement, pages_manage_ads. Dán token đó vào Kết nối → Dán token. '
+      + 'System User không phải con người nên không dính chốt xác thực này, và token của nó '
+      + 'không hết hạn.\n\n'
+      + 'CÁCH CÒN LẠI — tự xác thực: đăng nhập Facebook bằng đúng người đã kết nối, vào Ads '
+      + 'Manager → chọn tài khoản quảng cáo → mở chỉnh sửa một nhóm quảng cáo bất kỳ → bấm '
+      + '"Start authentication" ở khung "Verifying your changes" bên phải. Không thấy nút thì '
+      + 'xem Business Settings → Security Center; khoá thường tự gỡ sau vài ngày. '
+      + 'Đừng bấm thử lại liên tục.';
   }
   return null;
 }
