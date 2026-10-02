@@ -1,0 +1,65 @@
+# Push lên main → kiểm tra → deploy lên testads.taki.vn.
+#
+# Kiểm tra (tsc + next build) chạy TRƯỚC khi chạm vào server: build hỏng thì
+# dừng ở đây, production không bị đụng. Deploy đi qua đúng deploy.sh mà người
+# chạy tay vẫn dùng — một đường deploy duy nhất, không có bản thứ hai lệch nhau.
+#
+# Secrets cần có (Settings → Secrets and variables → Actions):
+#   VPS_SSH_KEY      private key được phép ssh root@152.53.2.174
+#   VPS_KNOWN_HOSTS  dòng host key của 152.53.2.174 — ghim cứng, không
+#                    ssh-keyscan lúc chạy (keyscan tin bất kỳ ai trả lời).
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Hai lần push sát nhau: lần sau XẾP HÀNG chờ lần trước, không huỷ giữa chừng —
+# huỷ lúc đang npm ci / migrate trên server là để server ở trạng thái dở dang.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Kiểm tra kiểu
+        run: npx tsc --noEmit
+
+      # next build nạp module lúc gom dữ liệu trang nên cần biến môi trường có
+      # mặt — giá trị giả là đủ, build không kết nối database.
+      - name: Build thử
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://build:build@127.0.0.1:1/build
+          SESSION_PASSWORD: ci-build-only-session-password-0123456789
+
+      - name: Nạp khoá SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+
+      - name: Deploy
+        run: ./deploy.sh --go
+
+      - name: Kiểm tra từ ngoài
+        run: |
+          curl -fsS -o /dev/null -w 'testads.taki.vn/login: %{http_code}\n' https://testads.taki.vn/login

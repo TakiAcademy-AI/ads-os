@@ -29,6 +29,17 @@ npm run db:seed          # dữ liệu demo — admin@taki.vn / Admin@123456
 npm run dev
 ```
 
+## Deploy
+
+Push lên `main` là GitHub Actions (`.github/workflows/deploy.yml`) tự chạy
+`tsc` + `next build`, qua thì gọi `./deploy.sh --go` lên testads.taki.vn
+(VPS 152.53.2.174). Build hỏng thì dừng trước khi chạm server. Chạy lại tay:
+tab Actions → Deploy → Run workflow.
+
+Secrets của repo: `VPS_SSH_KEY` (private key ssh root được) và
+`VPS_KNOWN_HOSTS` (host key ghim cứng). Deploy tay từ máy có key:
+`./deploy.sh --go`, hoặc `DEPLOY_KEY=~/.ssh/<key> ./deploy.sh --go`.
+
 ## Trạng thái
 
 | Xong | Chưa |

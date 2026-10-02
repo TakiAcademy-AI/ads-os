@@ -10,7 +10,7 @@
 set -euo pipefail
 
 HOST=root@152.53.2.174
-KEY=~/.ssh/id_ed25519
+KEY=${DEPLOY_KEY:-$HOME/.ssh/id_ed25519}
 REMOTE=/opt/ads-os
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -48,17 +48,33 @@ echo "==> đẩy lên"
 scp -i "$KEY" -q /tmp/ads-os-deploy.tgz "$HOST:/tmp/"
 
 echo "==> triển khai"
-ssh -i "$KEY" "$HOST" 'set -e
-  cd /opt/ads-os
-  tar xzf /tmp/ads-os-deploy.tgz
-  rm -f /tmp/ads-os-deploy.tgz
-  npm ci --no-audit --no-fund 2>&1 | tail -2
-  npm run db:migrate 2>&1 | tail -1
-  npm run build 2>&1 | tail -3
-  systemctl restart ads-os
+# bash + pipefail, và mỗi bước phải thành công mới sang bước sau. Bản cũ nối
+# `| tail` sau npm nên build hỏng vẫn báo thành công rồi restart — với deploy
+# tự động từ CI thì đó là sập production mà không ai hay.
+ssh -i "$KEY" "$HOST" bash -se <<'REMOTE'
+set -euo pipefail
+run() {
+  if "$@" >/tmp/ads-os-step.log 2>&1; then tail -2 /tmp/ads-os-step.log
+  else tail -40 /tmp/ads-os-step.log; echo "DỪNG: '$*' thất bại" >&2; exit 1; fi
+}
+cd /opt/ads-os
+tar xzf /tmp/ads-os-deploy.tgz
+rm -f /tmp/ads-os-deploy.tgz
+run npm ci --no-audit --no-fund
+run npm run db:migrate
+run npm run build
+systemctl restart ads-os
+# Next khởi động mất vài giây — chờ tới 60s thay vì ngủ cứng rồi đoán.
+for _ in $(seq 1 12); do
   sleep 5
-  systemctl is-active ads-os
-  curl -s -o /dev/null -w "http nội bộ: %{http_code}\n" http://127.0.0.1:3100/login'
+  if curl -fs -o /dev/null http://127.0.0.1:3100/login; then
+    echo "http nội bộ: 200 · $(systemctl is-active ads-os)"; exit 0
+  fi
+done
+systemctl status ads-os --no-pager | tail -20
+echo "DỪNG: app không trả 200 sau 60s" >&2
+exit 1
+REMOTE
 
 rm -f /tmp/ads-os-deploy.tgz
 echo "==> xong — https://testads.taki.vn"
