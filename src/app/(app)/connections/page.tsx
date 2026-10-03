@@ -6,6 +6,7 @@ import { googleOauthConfig, developerToken } from '@/lib/ads/google-oauth';
 import { ConnectPanel } from './connect-panel';
 import { AccountActions } from './account-actions';
 import { SyncButton } from './sync-button';
+import { PagesCard } from './pages-card';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +36,16 @@ export default async function ConnectionsPage() {
      FROM sync_log l LEFT JOIN ad_account a ON a.id = l.ad_account_id
      WHERE a.owner_id = $1 OR l.ad_account_id IS NULL
      ORDER BY l.created_at DESC LIMIT 15`,
+    [user.id],
+  );
+
+  // Kèm số cấu hình đang lấy bài từ từng Page — gỡ Page đó thì cấu hình dừng.
+  const { rows: pages } = await db.query(
+    `SELECT p.page_id, p.name, p.encrypted_token IS NOT NULL AS has_token,
+            (SELECT COUNT(*)::int FROM automation_config c
+             WHERE c.owner_id = p.owner_id AND c.kind = 'post_trigger'
+               AND c.params->>'pageId' = p.page_id) AS configs
+     FROM fb_page p WHERE p.owner_id = $1 ORDER BY p.name`,
     [user.id],
   );
 
@@ -124,6 +135,12 @@ export default async function ConnectionsPage() {
           </table>
         )}
       </div>
+
+      {(pages.length > 0 || accounts.some((a) => a.platform === 'facebook')) && (
+        <PagesCard pages={pages.map((p) => ({
+          pageId: p.page_id, name: p.name, hasToken: p.has_token, configs: p.configs,
+        }))} />
+      )}
 
       {logs.length > 0 && (
         <div className="card">

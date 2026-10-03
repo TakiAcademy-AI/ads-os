@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireWriter } from '@/lib/session';
 import { db } from '@/lib/db';
+import { deletePages } from '@/lib/ads/pages';
 
 const Patch = z.object({ status: z.enum(['active', 'disconnected']) });
 
@@ -37,5 +38,15 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
     [user.id, id],
   );
   if (!rowCount) return NextResponse.json({ error: 'Không tìm thấy tài khoản' }, { status: 404 });
-  return NextResponse.json({ ok: true });
+
+  // Page token lấy bằng token của tài khoản. Không còn tài khoản Facebook nào
+  // giữ token thì Page cũng phải đi theo — không thì Page của token cũ cứ nằm
+  // lại trong danh sách chọn, lẫn với Page của token mới.
+  const { rows } = await db.query(
+    `SELECT 1 FROM ad_account
+     WHERE owner_id = $1 AND platform = 'facebook' AND encrypted_token IS NOT NULL LIMIT 1`,
+    [user.id],
+  );
+  const pagesRemoved = rows.length ? 0 : await deletePages(user.id);
+  return NextResponse.json({ ok: true, pagesRemoved });
 }

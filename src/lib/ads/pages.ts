@@ -84,6 +84,23 @@ export async function listPages(ownerId: string): Promise<{ pageId: string; name
   return rows.map((r) => ({ pageId: r.page_id, name: r.name, hasToken: r.has_token }));
 }
 
+/**
+ * Gỡ Page khỏi hệ thống (xoá luôn page token). Không truyền pageIds là gỡ hết.
+ *
+ * Page chỉ được CỘNG thêm mỗi lần dán token / đăng nhập Facebook, nên đây là
+ * đường duy nhất để dọn Page không còn dùng. Cấu hình đang trỏ vào Page đã gỡ
+ * sẽ dừng ở bước "Không có token của Page" chứ không chạy sai Page.
+ */
+export async function deletePages(ownerId: string, pageIds?: string[]): Promise<number> {
+  const { rowCount } = pageIds
+    ? await db.query(
+      `DELETE FROM fb_page WHERE owner_id = $1 AND page_id = ANY($2::text[])`,
+      [ownerId, pageIds],
+    )
+    : await db.query(`DELETE FROM fb_page WHERE owner_id = $1`, [ownerId]);
+  return rowCount ?? 0;
+}
+
 export async function readPageToken(ownerId: string, pageId: string): Promise<string | null> {
   try {
     const { rows } = await db.query(

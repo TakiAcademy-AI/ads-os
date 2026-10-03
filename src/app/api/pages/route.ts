@@ -1,5 +1,5 @@
 import { requireUser, requireWriter } from '@/lib/session';
-import { listPages, fetchPages, savePages } from '@/lib/ads/pages';
+import { listPages, fetchPages, savePages, deletePages } from '@/lib/ads/pages';
 import { readToken } from '@/lib/ads/token';
 import { db } from '@/lib/db';
 
@@ -50,4 +50,10 @@ export async function POST() {
       { error: e instanceof Error ? e.message : 'Lỗi không rõ' }, { status: 502 },
     );
   }
+}
+
+/** Gỡ toàn bộ Page đã nạp. Muốn dùng lại thì bấm Nạp lại Page hoặc kết nối lại. */
+export async function DELETE() {
+  const user = await requireWriter();
+  return Response.json({ removed: await deletePages(user.id) });
 }
