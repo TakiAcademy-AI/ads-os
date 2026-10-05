@@ -16,6 +16,8 @@ import * as fbWrite from './facebook-write';
 import * as gWrite from './google-write';
 import { googleSession, GoogleSetupError } from './google-session';
 import { GoogleAdsError } from './google';
+import * as ttWrite from './tiktok-write';
+import { TikTokError } from './tiktok';
 
 export type Platform = 'facebook' | 'google' | 'tiktok';
 
@@ -54,6 +56,7 @@ function wrap(e: unknown): PlatformWriteError {
     return new PlatformWriteError(e.message, e.isAuthProblem);
   }
   if (e instanceof GoogleSetupError) return new PlatformWriteError(e.message, true);
+  if (e instanceof TikTokError) return new PlatformWriteError(e.message, e.isAuthProblem);
   return new PlatformWriteError(e instanceof Error ? e.message : String(e));
 }
 
@@ -71,6 +74,10 @@ export async function pauseCampaign(
     }
     const token = await readToken(adAccountId);
     if (!token) throw new PlatformWriteError('Không đọc được token', true);
+    if (ctx.platform === 'tiktok') {
+      await ttWrite.setCampaignStatus(token, ctx.externalId, campaignExternalId, 'DISABLE');
+      return;
+    }
     await fbWrite.setCampaignStatus(token, campaignExternalId, 'PAUSED');
   } catch (e) {
     throw wrap(e);
@@ -95,6 +102,11 @@ export async function readCampaignStatus(
     }
     const token = await readToken(adAccountId);
     if (!token) return null;
+    if (ctx.platform === 'tiktok') {
+      // ENABLE/DISABLE → ACTIVE/PAUSED: nơi gọi so sánh với 'PAUSED'.
+      const c = await ttWrite.getCampaign(token, ctx.externalId, campaignExternalId);
+      return c ? (c.operationStatus === 'ENABLE' ? 'ACTIVE' : 'PAUSED') : null;
+    }
     return await fbWrite.readCampaignStatus(token, campaignExternalId);
   } catch {
     return null;
@@ -122,6 +134,12 @@ export async function setDailyBudget(
     }
     const token = await readToken(adAccountId);
     if (!token) throw new PlatformWriteError('Không đọc được token', true);
+    if (ctx.platform === 'tiktok') {
+      // TikTok nhận đơn vị tiền tệ CÓ phần lẻ; hàm bên dưới từ chối chiến dịch
+      // không đặt ngân sách theo ngày ở cấp chiến dịch.
+      await ttWrite.setCampaignDailyBudget(token, ctx.externalId, campaignExternalId, budgetMicros, ctx.currency);
+      return;
+    }
     // Facebook nhận đơn vị nhỏ nhất của tiền tệ, nên phải truyền currency.
     await fbWrite.setCampaignDailyBudget(token, campaignExternalId, budgetMicros, ctx.currency);
   } catch (e) {
@@ -142,6 +160,10 @@ export async function readDailyBudget(
     }
     const token = await readToken(adAccountId);
     if (!token) return null;
+    if (ctx.platform === 'tiktok') {
+      const c = await ttWrite.getCampaign(token, ctx.externalId, campaignExternalId);
+      return c?.budgetMicros ?? null;
+    }
     return await fbWrite.readCampaignBudget(token, campaignExternalId, ctx.currency);
   } catch {
     return null;

@@ -10,6 +10,8 @@ import { readToken } from './token';
 import { googleSession } from './google-session';
 import { googleCampaignDetail } from './google-detail';
 import { facebookCampaignDetail } from './facebook-detail';
+import { tiktokCampaignDetail } from './tiktok-detail';
+import * as ttWrite from './tiktok-write';
 import * as gWrite from './google-write';
 import * as fbWrite from './facebook-write';
 import type { CampaignDetail } from './campaign-detail-types';
@@ -50,6 +52,11 @@ export async function loadCampaignDetail(ref: CampaignRef): Promise<CampaignDeta
     const token = await readToken(ref.adAccountId);
     if (!token) throw new Error('Không đọc được token Facebook — kết nối lại tài khoản');
     return facebookCampaignDetail(token, ref.accountExternalId, ref.externalId, ref.currency);
+  }
+  if (ref.platform === 'tiktok') {
+    const token = await readToken(ref.adAccountId);
+    if (!token) throw new Error('Không đọc được token TikTok — kết nối lại tài khoản');
+    return tiktokCampaignDetail(token, ref.accountExternalId, ref.externalId, ref.currency);
   }
   throw new Error('Nền tảng này chưa hỗ trợ xem chi tiết');
 }
@@ -162,6 +169,23 @@ async function apply(ref: CampaignRef, a: EditAction): Promise<void> {
       default: throw new Error('Facebook chưa hỗ trợ thao tác này từ Ads OS');
     }
   }
+  if (ref.platform === 'tiktok') {
+    const token = await readToken(ref.adAccountId);
+    if (!token) throw new Error('Không đọc được token TikTok — kết nối lại tài khoản');
+    const adv = ref.accountExternalId;
+    const st = (on: boolean) => (on ? 'ENABLE' : 'DISABLE') as ttWrite.TtStatus;
+    const micros = (v: number) => Math.round(v * 1_000_000);
+    switch (a.action) {
+      case 'rename': return ttWrite.renameCampaign(token, adv, ref.externalId, a.name);
+      case 'status': return ttWrite.setCampaignStatus(token, adv, ref.externalId, st(a.enabled));
+      case 'budget': return ttWrite.setCampaignDailyBudget(token, adv, ref.externalId, micros(a.dailyBudget), ref.currency);
+      case 'group_status': return ttWrite.setAdGroupStatus(token, adv, a.groupId, st(a.enabled));
+      // Ngân sách ngày của nhóm TikTok có hiệu lực từ 00:00 HÔM SAU — xem tiktok-write.ts.
+      case 'group_budget': return ttWrite.setAdGroupDailyBudget(token, adv, a.groupId, micros(a.dailyBudget), ref.currency);
+      case 'ad_status': return ttWrite.setAdStatus(token, adv, a.adId, st(a.enabled));
+      default: throw new Error('TikTok chưa hỗ trợ thao tác này từ Ads OS');
+    }
+  }
   throw new Error('Nền tảng này chưa hỗ trợ chỉnh sửa');
 }
 
@@ -216,6 +240,7 @@ async function syncLocal(
   if (a.action === 'rename') {
     await db.query(`UPDATE ad_campaign SET name = $2, updated_at = NOW() WHERE id = $1`, [ref.id, a.name]);
   } else if (a.action === 'status') {
+    // Google lưu ENABLED; Facebook và TikTok (đã chuẩn hoá lúc đồng bộ) lưu ACTIVE.
     const v = a.enabled ? (ref.platform === 'google' ? 'ENABLED' : 'ACTIVE') : 'PAUSED';
     await db.query(`UPDATE ad_campaign SET status = $2, updated_at = NOW() WHERE id = $1`, [ref.id, v]);
   } else if (a.action === 'budget') {

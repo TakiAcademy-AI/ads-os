@@ -18,7 +18,7 @@ export default function PrivacyPage() {
       intro={<>
         Ads OS là công cụ vận hành quảng cáo do <b>{COMPANY}</b> (&ldquo;chúng tôi&rdquo;)
         phát triển và vận hành tại <span className="mono">testads.taki.vn</span>. Ads OS
-        đọc số liệu từ tài khoản quảng cáo Facebook và Google Ads mà bạn chủ động kết
+        đọc số liệu từ tài khoản quảng cáo Facebook, Google Ads và TikTok mà bạn chủ động kết
         nối, hiển thị báo cáo, và chỉ thay đổi quảng cáo khi bạn tự bật chế độ đó.
         Chính sách này giải thích chúng tôi lấy dữ liệu gì, dùng vào việc gì, lưu ở
         đâu và bạn xóa nó bằng cách nào.
@@ -58,6 +58,17 @@ export default function PrivacyPage() {
           mã hóa trước khi lưu và xóa khi bạn ngắt kết nối.
         </li>
         <li>Tên, loại, trạng thái, ngân sách chiến dịch và số liệu hiệu quả theo ngày.</li>
+      </UL>
+
+      <P><b>Dữ liệu từ TikTok for Business</b>, chỉ khi bạn kết nối:</P>
+      <UL>
+        <li>Mã, tên, tiền tệ, múi giờ của tài khoản quảng cáo (advertiser).</li>
+        <li>Access token do TikTok cấp, được mã hóa trước khi lưu.</li>
+        <li>
+          Tên, mục tiêu, trạng thái, ngân sách của chiến dịch, nhóm quảng cáo, quảng cáo; nội
+          dung chữ và kết quả duyệt của quảng cáo; số liệu theo ngày như chi tiêu, hiển thị,
+          lượt nhấp, chuyển đổi.
+        </li>
       </UL>
 
       <P>
@@ -114,7 +125,7 @@ export default function PrivacyPage() {
       <P>Dữ liệu của bạn chỉ đi tới những nơi sau:</P>
       <UL>
         <li>
-          <b>Meta và Google</b>: Ads OS gửi yêu cầu tới API của họ bằng token bạn cấp để đọc
+          <b>Meta, Google và TikTok</b>: Ads OS gửi yêu cầu tới API của họ bằng token bạn cấp để đọc
           số liệu và thực hiện thao tác bạn yêu cầu.
         </li>
         <li>
@@ -134,7 +145,7 @@ export default function PrivacyPage() {
           HTTPS.
         </li>
         <li>
-          Access token, refresh token và page token được mã hóa bằng khóa riêng trước khi
+          Access token, refresh token, page token và khóa service account được mã hóa bằng khóa riêng trước khi
           ghi vào cơ sở dữ liệu, và không bao giờ hiển thị lại trên giao diện.
         </li>
         <li>API key chỉ lưu dạng băm SHA-256; bạn chỉ thấy key một lần lúc tạo.</li>
@@ -173,7 +184,10 @@ export default function PrivacyPage() {
             Facebook → Ứng dụng và trang web</a>{' '}
           hoặc{' '}
           <a href="https://myaccount.google.com/permissions" style={linkStyle}>
-            Google → Ứng dụng bên thứ ba có quyền truy cập</a>.
+            Google → Ứng dụng bên thứ ba có quyền truy cập</a>{' '}
+          hoặc{' '}
+          <a href="https://ads.tiktok.com/ac/page/authorizations" style={linkStyle}>
+            TikTok Ads → Ủy quyền</a>.
         </li>
         <li>Yêu cầu chỉnh sửa thông tin tài khoản hoặc khiếu nại về việc xử lý dữ liệu.</li>
       </UL>

@@ -6,7 +6,7 @@
 // `serving` + `reasons` là việc nền tảng có thật sự cho chạy hay không — hai thứ
 // này lệch nhau là chuyện thường (bật rồi nhưng chưa duyệt, hết ngân sách…).
 
-export type Platform = 'facebook' | 'google';
+export type Platform = 'facebook' | 'google' | 'tiktok';
 
 export interface DetailIssue {
   /** Mã gốc của nền tảng, giữ lại để tra cứu. */

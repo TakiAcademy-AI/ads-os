@@ -6,6 +6,7 @@
 import { db } from '../db';
 import { syncAccount, logSync, type SyncResult } from './sync';
 import { syncGoogleAccount } from './google-sync';
+import { syncTikTokAccount } from './tiktok-sync';
 
 export type { SyncResult };
 
@@ -28,10 +29,10 @@ export async function syncAnyAccount(
     return r;
   }
   if (platform === 'tiktok') {
-    return {
-      ok: false, campaigns: 0, metricRows: 0, revisionRows: 0, durationMs: 0,
-      error: 'TikTok chưa được hỗ trợ',
-    };
+    // TikTok chưa kéo cấp nhóm/quảng cáo và chỉ số kéo thêm — như Google.
+    const r = await syncTikTokAccount(adAccountId, { lookbackDays: opts.lookbackDays });
+    await logSync(adAccountId, r);
+    return r;
   }
   return syncAccount(adAccountId, opts);
 }

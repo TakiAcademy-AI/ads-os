@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { dateTime } from '@/lib/format';
 import { oauthConfig } from '@/lib/ads/facebook-oauth';
 import { googleOauthConfig } from '@/lib/ads/google-oauth';
+import { tiktokOauthConfig } from '@/lib/ads/tiktok-oauth';
 import { ConnectPanel } from './connect-panel';
 import { AccountActions } from './account-actions';
 import { SyncButton } from './sync-button';
@@ -61,6 +62,7 @@ export default async function ConnectionsPage() {
       <ConnectPanel
         oauthReady={oauthConfig('http://x') !== null}
         googleReady={googleOauthConfig('http://x') !== null}
+        tiktokReady={tiktokOauthConfig('http://x') !== null}
       />
 
       <div className="card" style={{ marginBottom: 16 }}>

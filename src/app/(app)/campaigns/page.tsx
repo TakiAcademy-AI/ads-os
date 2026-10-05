@@ -106,7 +106,7 @@ export default async function CampaignsPage() {
     getPauseConfig(accountId),
     db.query(`SELECT platform FROM ad_account WHERE id = $1`, [accountId]),
   ]);
-  const platformLabel = acct[0]?.platform === 'google' ? 'Google Ads' : 'Facebook Ads';
+  const platformLabel = ({ google: 'Google Ads', tiktok: 'TikTok Ads' } as Record<string, string>)[acct[0]?.platform] ?? 'Facebook Ads';
   const saved = campaigns.filter((c) => c.assessment.verdict === 'saved');
   // Có chi tiêu nhưng hệ thống không biết đếm chuyển đổi kiểu gì → CPA vô nghĩa,
   // guard không bao giờ đụng tới. Người dùng phải biết mình đang mù chỗ nào.

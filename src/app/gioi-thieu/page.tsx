@@ -9,9 +9,9 @@ import Link from 'next/link';
 import { LegalLinks, COMPANY, TAX_ID, CONTACT } from '../_legal/shell';
 
 export const metadata = {
-  title: 'Ads OS — Vận hành quảng cáo Facebook và Google Ads',
+  title: 'Ads OS — Vận hành quảng cáo Facebook, Google Ads và TikTok',
   description:
-    'Ads OS kéo số liệu từ tài khoản quảng cáo Facebook và Google Ads, báo cáo hiệu quả, '
+    'Ads OS kéo số liệu từ tài khoản quảng cáo Facebook, Google Ads và TikTok, báo cáo hiệu quả, '
     + 'và tự động tạm dừng chiến dịch hoặc đổi ngân sách theo ngưỡng do bạn đặt.',
 };
 
@@ -19,7 +19,7 @@ const FEATURES: { title: string; body: string }[] = [
   {
     title: 'Báo cáo hợp nhất',
     body: 'Kéo chi tiêu, hiển thị, lượt nhấp, chuyển đổi theo ngày từ Facebook Ads và '
-      + 'Google Ads về một bảng điều khiển, theo dõi từng chiến dịch và xu hướng theo ngày.',
+      + 'Google Ads, TikTok về một bảng điều khiển, theo dõi từng chiến dịch và xu hướng theo ngày.',
   },
   {
     title: 'Tự động hóa có kiểm soát',
@@ -56,7 +56,7 @@ export default function AboutPage() {
           Ads OS
           <span style={{ display: 'block', color: 'var(--ink-2)', fontWeight: 500,
                          fontSize: 'clamp(18px, 3vw, 24px)', letterSpacing: '-0.2px', marginTop: 8 }}>
-            Vận hành quảng cáo Facebook và Google Ads trên một màn hình
+            Vận hành quảng cáo Facebook, Google Ads và TikTok trên một màn hình
           </span>
         </h1>
         <p style={{ fontSize: 16, color: 'var(--ink-2)', lineHeight: 1.7, maxWidth: 640, margin: '0 0 24px' }}>
@@ -115,7 +115,7 @@ export default function AboutPage() {
         </h2>
         <p style={{ margin: 0 }}>
           Ads OS is an advertising operations tool built by {COMPANY}. It connects to the
-          Facebook Ads and Google Ads accounts that a user authorizes, imports campaign
+          Facebook Ads, Google Ads and TikTok Ads accounts that a user authorizes, imports campaign
           structure and daily performance metrics for reporting, and lets the user pause
           campaigns or change budgets, either manually or through rules the user configures.
           Ads OS requests the Google Ads API scope only to provide these features; the data is

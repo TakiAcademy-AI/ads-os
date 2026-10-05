@@ -17,6 +17,8 @@ export interface SessionData {
   /** Cùng vai trò với fbOauthState, cho luồng OAuth của Google. Tách riêng để
    *  hai luồng chạy song song không ghi đè state của nhau. */
   googleOauthState?: string;
+  /** Cùng vai trò, cho luồng OAuth của TikTok. */
+  tiktokOauthState?: string;
   /** Tài khoản QC đang xem. Xác thực lại quyền sở hữu mỗi lần đọc. */
   accountId?: string;
 }

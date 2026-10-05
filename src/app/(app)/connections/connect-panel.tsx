@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GoogleServiceAccountForm } from './google-sa-form';
+import { TikTokTokenForm } from './tiktok-token-form';
 
 interface Found {
   externalId: string;
@@ -18,12 +19,13 @@ const inputStyle: React.CSSProperties = {
   background: 'var(--card)', color: 'var(--ink)',
 };
 
-export function ConnectPanel({ oauthReady, googleReady }: {
+export function ConnectPanel({ oauthReady, googleReady, tiktokReady }: {
   oauthReady: boolean;
   googleReady: boolean;
+  tiktokReady: boolean;
 }) {
   const router = useRouter();
-  const [mode, setMode] = useState<'oauth' | 'google' | 'token'>(oauthReady ? 'oauth' : 'token');
+  const [mode, setMode] = useState<'oauth' | 'google' | 'tiktok' | 'token'>(oauthReady ? 'oauth' : 'token');
   const [token, setToken] = useState('');
   const [found, setFound] = useState<Found[] | null>(null);
   const [error, setError] = useState('');
@@ -64,7 +66,7 @@ export function ConnectPanel({ oauthReady, googleReady }: {
     return () => window.removeEventListener('message', onMessage);
   }, [router]);
 
-  function startOauth(platform: 'facebook' | 'google' = 'facebook') {
+  function startOauth(platform: 'facebook' | 'google' | 'tiktok' = 'facebook') {
     setBusy(true); setError(''); setInfo('');
     const w = 620, h = 720;
     const left = window.screenX + (window.outerWidth - w) / 2;
@@ -144,6 +146,8 @@ export function ConnectPanel({ oauthReady, googleReady }: {
             ['oauth', 'Facebook', oauthReady],
             // Service account không cần GOOGLE_ADS_CLIENT_ID — tab luôn dùng được.
             ['google', 'Google Ads', true],
+            // Dán token không cần app — tab luôn dùng được.
+            ['tiktok', 'TikTok', true],
             ['token', 'Dán token (token chính)', true],
           ] as const).map(([m, label, ready]) => (
             <button key={m} onClick={() => setMode(m)}
@@ -229,6 +233,36 @@ export function ConnectPanel({ oauthReady, googleReady }: {
             )}
             <div style={{ borderTop: '1px solid var(--line)', margin: '18px 0 16px' }} />
             <GoogleServiceAccountForm />
+          </>
+        )}
+
+        {mode === 'tiktok' && (
+          <>
+            {tiktokReady ? (
+              <>
+                <button className="btn" onClick={() => startOauth('tiktok')} disabled={busy}
+                        style={{ background: '#000', fontSize: 14, padding: '11px 20px' }}>
+                  {busy ? 'Đang chờ cửa sổ TikTok…' : 'Đăng nhập bằng TikTok for Business'}
+                </button>
+                <div className="note" style={{ maxWidth: 'none', marginTop: 10 }}>
+                  Popup mở trang cấp quyền của TikTok — <b>tick chọn tài khoản quảng cáo</b> muốn
+                  dùng. Token TikTok cấp là <b>token dài hạn, không hết hạn</b>; chỉ mất khi bạn tự thu
+                  hồi quyền ở ads.tiktok.com.
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                Chưa cấu hình app TikTok để đăng nhập. Tạo app ở{' '}
+                <span className="mono">business-api.tiktok.com/portal/apps</span> (duyệt 2–3 ngày làm
+                việc), rồi thêm <span className="mono">TIKTOK_APP_ID</span> và{' '}
+                <span className="mono">TIKTOK_APP_SECRET</span> vào <span className="mono">.env</span>,
+                khai redirect URL{' '}
+                <span className="mono">{typeof window !== 'undefined' ? window.location.origin : ''}/api/connections/tiktok/callback</span>.
+                Trong lúc chờ, dán token bên dưới.
+              </div>
+            )}
+            <div style={{ borderTop: '1px solid var(--line)', margin: '18px 0 16px' }} />
+            <TikTokTokenForm needIds={!tiktokReady} />
           </>
         )}
 

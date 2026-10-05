@@ -64,7 +64,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             {detail?.campaign.nativeUrl && (
               <> · <a href={detail.campaign.nativeUrl} target="_blank" rel="noreferrer"
                       style={{ color: 'var(--acc-ink)' }}>
-                mở trên {ref.platform === 'google' ? 'Google Ads' : 'Trình quản lý quảng cáo'} ↗
+                mở trên {ref.platform === 'google' ? 'Google Ads' : ref.platform === 'tiktok' ? 'TikTok Ads Manager' : 'Trình quản lý quảng cáo'} ↗
               </a></>
             )}
           </p>
