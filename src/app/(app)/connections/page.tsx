@@ -105,6 +105,9 @@ export default async function ConnectionsPage() {
                       {a.has_token && a.token_source === 'manual' && (
                         <div className="note" style={{ margin: '4px 0 0' }}>dán tay · token chính</div>
                       )}
+                      {a.has_token && a.token_source === 'service_account' && (
+                        <div className="note" style={{ margin: '4px 0 0' }}>service account</div>
+                      )}
                     </td>
                     <td style={{ color: 'var(--dim)' }}>
                       {a.last_synced_at ? dateTime(new Date(a.last_synced_at).toISOString()) : 'chưa bao giờ'}

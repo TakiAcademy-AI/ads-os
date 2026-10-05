@@ -106,9 +106,12 @@ export async function GET(req: Request) {
            timezone = EXCLUDED.timezone,
            login_customer_id = EXCLUDED.login_customer_id,
            last_error = NULL, updated_at = NOW()
-         RETURNING id`,
+         RETURNING id, token_source`,
         [user.id, a.id, a.name, a.currency, a.timeZone, a.loginCustomerId],
       );
+      // Tài khoản đang kết nối bằng service account thì GIỮ khoá đó — người
+      // dùng chọn service account chính là vì đăng nhập Google không dùng được.
+      if (rows[0]?.token_source === 'service_account') { saved++; continue; }
       // Lưu REFRESH token, không phải access token — access token sống 1 giờ.
       if (rows[0]) { await saveToken(rows[0].id, refreshToken); saved++; }
     }

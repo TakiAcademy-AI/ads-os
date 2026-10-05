@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { GoogleServiceAccountForm } from './google-sa-form';
 
 interface Found {
   externalId: string;
@@ -141,7 +142,8 @@ export function ConnectPanel({ oauthReady, googleReady }: {
               nó dạy cách mở. */}
           {([
             ['oauth', 'Facebook', oauthReady],
-            ['google', 'Google Ads', googleReady],
+            // Service account không cần GOOGLE_ADS_CLIENT_ID — tab luôn dùng được.
+            ['google', 'Google Ads', true],
             ['token', 'Dán token (token chính)', true],
           ] as const).map(([m, label, ready]) => (
             <button key={m} onClick={() => setMode(m)}
@@ -219,9 +221,14 @@ export function ConnectPanel({ oauthReady, googleReady }: {
                   ngày</b> — Google cấp refresh token sống vĩnh viễn, chỉ mất khi bạn tự
                   thu hồi quyền. Và tài khoản <b>quản lý (MCC) sẽ bị bỏ qua</b>: chúng
                   không chạy quảng cáo trực tiếp nên đồng bộ về cũng không có số liệu.
+                  <br /><br />
+                  Popup bị Google chặn (đòi passkey, báo &ldquo;rejected&rdquo;)? Dùng cách
+                  service account bên dưới — không cần đăng nhập Google.
                 </div>
               </>
             )}
+            <div style={{ borderTop: '1px solid var(--line)', margin: '18px 0 16px' }} />
+            <GoogleServiceAccountForm />
           </>
         )}
 

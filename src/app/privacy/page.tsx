@@ -53,7 +53,10 @@ export default function PrivacyPage() {
       <P><b>Dữ liệu từ Google Ads</b>, chỉ khi bạn kết nối:</P>
       <UL>
         <li>Mã khách hàng (customer ID), tên, tiền tệ, múi giờ của tài khoản quảng cáo.</li>
-        <li>Refresh token do Google cấp, được mã hóa trước khi lưu.</li>
+        <li>
+          Refresh token do Google cấp, hoặc khóa service account do bạn cung cấp; cả hai được
+          mã hóa trước khi lưu và xóa khi bạn ngắt kết nối.
+        </li>
         <li>Tên, loại, trạng thái, ngân sách chiến dịch và số liệu hiệu quả theo ngày.</li>
       </UL>
 

@@ -6,6 +6,7 @@
 import { db } from '../db';
 import { readToken } from './token';
 import { googleOauthConfig, developerToken, accessTokenFrom } from './google-oauth';
+import { parseServiceAccountKey, saAccessToken } from './google-sa';
 import type { GoogleAuth } from './google';
 
 export interface GoogleSession {
@@ -28,34 +29,42 @@ export class GoogleSetupError extends Error {
  * gộp hết thành "không kết nối được" thì người dùng không biết phải sửa gì.
  */
 export async function googleSession(adAccountId: string): Promise<GoogleSession> {
-  // Không cần origin ở đây vì chỉ dùng clientId/clientSecret để đổi token.
-  const cfg = googleOauthConfig('');
-  if (!cfg) {
-    throw new GoogleSetupError('Thiếu GOOGLE_ADS_CLIENT_ID hoặc GOOGLE_ADS_CLIENT_SECRET.');
-  }
-
   const { rows } = await db.query(
-    `SELECT external_id, currency, login_customer_id
+    `SELECT external_id, currency, login_customer_id, token_source
      FROM ad_account WHERE id = $1 AND platform = 'google'`,
     [adAccountId],
   );
   if (!rows[0]) throw new GoogleSetupError('Không tìm thấy tài khoản Google này');
 
-  // encrypted_token của Google giữ REFRESH token, không phải access token.
-  const refresh = await readToken(adAccountId);
-  if (!refresh) {
-    throw new GoogleSetupError('Chưa có refresh token — kết nối lại tài khoản Google');
+  // encrypted_token của Google giữ REFRESH token (đăng nhập Google) hoặc file
+  // khoá JSON (service account) — tuỳ token_source.
+  const secret = await readToken(adAccountId);
+  if (!secret) {
+    throw new GoogleSetupError('Chưa có thông tin xác thực — kết nối lại tài khoản Google');
   }
 
   let accessToken: string;
-  try {
-    accessToken = await accessTokenFrom(cfg, refresh);
-  } catch (e) {
-    throw new GoogleSetupError(
-      `Không đổi được refresh token lấy access token: `
-      + `${e instanceof Error ? e.message : String(e)}. `
-      + `Thường là do người dùng đã thu hồi quyền — cần kết nối lại.`,
-    );
+  if (rows[0].token_source === 'service_account') {
+    try {
+      accessToken = await saAccessToken(parseServiceAccountKey(secret));
+    } catch (e) {
+      throw new GoogleSetupError(e instanceof Error ? e.message : String(e));
+    }
+  } else {
+    // Không cần origin ở đây vì chỉ dùng clientId/clientSecret để đổi token.
+    const cfg = googleOauthConfig('');
+    if (!cfg) {
+      throw new GoogleSetupError('Thiếu GOOGLE_ADS_CLIENT_ID hoặc GOOGLE_ADS_CLIENT_SECRET.');
+    }
+    try {
+      accessToken = await accessTokenFrom(cfg, secret);
+    } catch (e) {
+      throw new GoogleSetupError(
+        `Không đổi được refresh token lấy access token: `
+        + `${e instanceof Error ? e.message : String(e)}. `
+        + `Thường là do người dùng đã thu hồi quyền — cần kết nối lại.`,
+      );
+    }
   }
 
   return {
