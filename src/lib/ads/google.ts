@@ -359,7 +359,7 @@ export interface GoogleCampaign {
 interface CampaignRow {
   campaign?: {
     id?: string; name?: string; status?: string;
-    advertisingChannelType?: string; startDate?: string; campaignBudget?: string;
+    advertisingChannelType?: string; startDateTime?: string; campaignBudget?: string;
   };
   campaignBudget?: { amountMicros?: string; resourceName?: string };
 }
@@ -369,7 +369,7 @@ export async function listCampaigns(
 ): Promise<GoogleCampaign[]> {
   const rows = await gaql<CampaignRow>(auth, customerId,
     `SELECT campaign.id, campaign.name, campaign.status,
-            campaign.advertising_channel_type, campaign.start_date,
+            campaign.advertising_channel_type, campaign.start_date_time,
             campaign_budget.amount_micros, campaign_budget.resource_name
      FROM campaign
      WHERE campaign.status != 'REMOVED'`);
@@ -383,7 +383,9 @@ export async function listCampaigns(
     dailyBudgetMicros: r.campaignBudget?.amountMicros
       ? Number(r.campaignBudget.amountMicros) : null,
     budgetResource: r.campaignBudget?.resourceName ?? null,
-    startDate: r.campaign!.startDate ?? null,
+    // Từ v23 Google bỏ start_date, thay bằng start_date_time dạng
+    // "2026-10-05 14:12:40" (giờ của tài khoản). Chỉ cần phần ngày.
+    startDate: r.campaign!.startDateTime?.slice(0, 10) ?? null,
   }));
 }
 
