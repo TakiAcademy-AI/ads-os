@@ -185,7 +185,8 @@ export function CampaignEditor({ campaignId, adAccountId, detail, canWrite }: {
                     </div>
                   )}
                 </td></tr>
-              <tr><td style={{ color: 'var(--dim)' }}>Giá thầu</td><td>{c.bidding ?? '—'}</td></tr>
+              <tr><td style={{ color: 'var(--dim)' }}>Giá thầu</td>
+                <td>{c.bidding ?? (c.budgetLevel === 'group' ? <span style={{ color: 'var(--dim)' }}>Đặt ở từng nhóm quảng cáo</span> : '—')}</td></tr>
               <tr><td style={{ color: 'var(--dim)' }}>Thời gian</td>
                 <td>{c.start ? `từ ${c.start.slice(0, 16).replace('T', ' ')}` : '—'}{c.end ? ` đến ${c.end.slice(0, 16).replace('T', ' ')}` : ' · không ngày kết thúc'}</td></tr>
             </tbody>
@@ -269,9 +270,7 @@ export function CampaignEditor({ campaignId, adAccountId, detail, canWrite }: {
                       {a.headlines.join(' | ')}
                     </div>
                   )}
-                  {a.descriptions.length > 0 && (
-                    <div style={{ fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.6 }}>{a.descriptions.join(' ')}</div>
-                  )}
+                  {a.descriptions.length > 0 && <Clamp text={a.descriptions.join(' ')} />}
                   {a.finalUrl && (
                     <a href={a.finalUrl} target="_blank" rel="noreferrer" className="mono"
                        style={{ fontSize: 11.5, color: 'var(--grn)', wordBreak: 'break-all' }}>{a.finalUrl}</a>
@@ -282,6 +281,20 @@ export function CampaignEditor({ campaignId, adAccountId, detail, canWrite }: {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Nội dung quảng cáo Facebook có thể dài cả trang — rút còn 3 dòng, bấm để mở. */
+function Clamp({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div onClick={() => setOpen(!open)} title={open ? 'Thu gọn' : 'Xem hết'}
+         style={{
+           fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.6, cursor: 'pointer', whiteSpace: 'pre-line',
+           ...(open ? {} : { display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }),
+         }}>
+      {text}
     </div>
   );
 }
