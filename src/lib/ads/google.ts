@@ -297,14 +297,40 @@ export async function describeManagerChildren(
 
   const children = rows.map((r) => r.customerClient).filter((c) => c?.id && !c.manager);
   if (children.length === 0) {
-    return `Trong toàn bộ cây dưới MCC ${managerId} không có tài khoản quảng cáo nào (hoặc lời `
-      + `mời liên kết chưa được chấp nhận).`;
+    // Lời mời liên kết đang chờ KHÔNG hiện trong customer_client — phải hỏi
+    // riêng customer_client_link ở từng MCC trong cây (gốc + MCC con).
+    const managers = [managerId, ...rows.map((r) => r.customerClient)
+      .filter((c) => c?.id && c.manager).map((c) => c!.id!)];
+    const pending: string[] = [];
+    for (const m of managers) {
+      const links = await gaql<{ customerClientLink?: { clientCustomer?: string; status?: string } }>(
+        { ...auth, loginCustomerId: managerId }, m,
+        `SELECT customer_client_link.client_customer, customer_client_link.status
+         FROM customer_client_link
+         WHERE customer_client_link.status = 'PENDING'`,
+      ).catch(() => []);
+      for (const l of links) {
+        const id = l.customerClientLink?.clientCustomer?.split('/').pop();
+        if (id) pending.push(`${fmtId(id)} (mời từ ${fmtId(m)})`);
+      }
+    }
+    if (pending.length) {
+      return `Có ${pending.length} lời mời liên kết ĐANG CHỜ chấp nhận: ${pending.join(', ')}. `
+        + `Đăng nhập tài khoản được mời → Quản trị → Quyền truy cập và bảo mật → tab Người `
+        + `quản lý → Chấp nhận.`;
+    }
+    return `Trong toàn bộ cây dưới MCC ${fmtId(managerId)} không có tài khoản quảng cáo nào, `
+      + `và cũng không có lời mời liên kết nào đang chờ.`;
   }
   const byStatus = new Map<string, number>();
   for (const c of children) byStatus.set(c!.status ?? 'UNKNOWN', (byStatus.get(c!.status ?? 'UNKNOWN') ?? 0) + 1);
   const list = [...byStatus].map(([st, n]) => `${n} ${STATUS_VI[st] ?? st}`).join(', ');
   return `MCC ${managerId} có ${children.length} tài khoản con nhưng không cái nào đang `
     + `hoạt động: ${list}.`;
+}
+
+function fmtId(id: string): string {
+  return id.replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3');
 }
 
 const STATUS_VI: Record<string, string> = {
