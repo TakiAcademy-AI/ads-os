@@ -57,34 +57,67 @@ function headers(auth: GoogleAuth): Record<string, string> {
   return h;
 }
 
-/**
- * Lỗi nghĩa là project Google Cloud mới ở cấp truy cập Test — chỉ gọi được tài
- * khoản thử nghiệm. Bản API cũ trả ACTION_NOT_PERMITTED, từ v25 trả
- * CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION. Thông điệp gốc của Google không
- * hề nhắc tới cách sửa, nên phải dịch ra.
- */
-const PROJECT_NOT_APPROVED = new Set([
-  'CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION', 'ACTION_NOT_PERMITTED',
-  'DEVELOPER_TOKEN_NOT_APPROVED',
-]);
 
-/** Bóc thông điệp lỗi có ích ra khỏi vỏ lỗi nhiều tầng của Google. */
-export function extractError(body: unknown, status: number): string {
-  const b = body as {
-    error?: {
-      message?: string;
-      details?: { errors?: { message?: string; errorCode?: Record<string, string> }[] }[];
-    };
-  } | undefined;
-  const first = b?.error?.details?.[0]?.errors?.[0];
-  const code = first?.errorCode ? Object.values(first.errorCode)[0] : undefined;
-  if (code && PROJECT_NOT_APPROVED.has(code)) {
-    return `Project Google Cloud của OAuth client đang ở cấp truy cập Test, chỉ gọi được `
-      + `tài khoản thử nghiệm (${code}). Vào Google Cloud Console → trang Tổng quan `
-      + `Google Ads API của project đó, đăng ký quyền Explorer hoặc Basic.`;
-  }
-  return first?.message || b?.error?.message || `Google Ads trả HTTP ${status}`;
+interface GoogleErrorBody {
+  message?: string;
+  status?: string;
+  details?: {
+    '@type'?: string;
+    reason?: string;
+    errors?: { message?: string; errorCode?: Record<string, string> }[];
+  }[];
 }
+
+/**
+ * Bóc thông điệp lỗi có ích ra khỏi vỏ lỗi nhiều tầng của Google.
+ *
+ * Hai bẫy đã gặp thật:
+ *   1. searchStream trả lỗi bọc trong MẢNG — `[{"error": {...}}]` — chứ không
+ *      phải object. Đọc thẳng `.error` là ra undefined và người dùng chỉ thấy
+ *      "Google Ads trả HTTP 403" trơ trọi.
+ *   2. details[0] thường là google.rpc.ErrorInfo, còn GoogleAdsFailure (chứa
+ *      errorCode thật) nằm ở phần tử sau — phải dò hết mảng.
+ */
+export function extractError(body: unknown, status: number): string {
+  const wrapped = (Array.isArray(body) ? body[0] : body) as { error?: GoogleErrorBody } | undefined;
+  const err = wrapped?.error;
+  const details = err?.details ?? [];
+  const adsErr = details.flatMap((d) => d.errors ?? [])[0];
+  const code = adsErr?.errorCode ? Object.values(adsErr.errorCode)[0] : undefined;
+  const reason = details.find((d) => d.reason)?.reason;
+  const raw = adsErr?.message || err?.message || `Google Ads trả HTTP ${status}`;
+
+  const hint = (code && HINTS[code]) || (reason && HINTS[reason]);
+  return hint ? `${hint} (${code ?? reason}: ${raw})` : (code ? `${raw} (${code})` : raw);
+}
+
+/**
+ * Lời giải cho những lỗi hay gặp lúc kết nối. Thông điệp gốc của Google gần
+ * như không bao giờ nói phải sửa ở đâu.
+ */
+const HINTS: Record<string, string> = {
+  CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION:
+    'Project Google Cloud đang ở cấp truy cập Test, chỉ gọi được tài khoản thử nghiệm. '
+    + 'Vào Google Cloud Console → trang Tổng quan Google Ads API của project, đăng ký Explorer hoặc Basic.',
+  ACTION_NOT_PERMITTED:
+    'Project Google Cloud chưa được phép gọi tài khoản thật (cấp truy cập Test). '
+    + 'Đăng ký Explorer hoặc Basic ở trang Tổng quan Google Ads API của project.',
+  DEVELOPER_TOKEN_NOT_APPROVED:
+    'Project Google Cloud chưa được duyệt cấp truy cập cho tài khoản thật. '
+    + 'Đăng ký Explorer hoặc Basic ở trang Tổng quan Google Ads API của project.',
+  USER_PERMISSION_DENIED:
+    'Tài khoản đăng nhập / service account không có quyền trên tài khoản Google Ads này. '
+    + 'Kiểm tra email đã được thêm đúng vào tài khoản (hoặc MCC quản lý nó) trong Quản trị → '
+    + 'Quyền truy cập và bảo mật, và lời mời đã được chấp nhận.',
+  CUSTOMER_NOT_ENABLED:
+    'Tài khoản Google Ads này chưa kích hoạt hoặc đã bị huỷ — chưa nhập thanh toán hay '
+    + 'chưa tạo chiến dịch đầu tiên thì Google chưa cho gọi API.',
+  SERVICE_DISABLED:
+    'Google Ads API chưa được bật trong project Google Cloud. Vào APIs & Services → '
+    + 'Library → Google Ads API → Enable, chờ vài phút rồi thử lại.',
+  ACCESS_TOKEN_SCOPE_INSUFFICIENT:
+    'Token không có quyền adwords. Kết nối lại.',
+};
 
 async function call<T>(
   path: string,
@@ -215,7 +248,9 @@ export async function listAdAccounts(auth: GoogleAuth): Promise<GoogleAdAccount[
        FROM customer_client
        WHERE customer_client.status = 'ENABLED'`,
     ).then((r) => { okRoots++; return r; }, (e) => {
-      firstError ??= e;
+      firstError ??= e instanceof GoogleAdsError
+        ? new GoogleAdsError(`Tài khoản ${root}: ${e.message}`, e.status, e.isAuthProblem)
+        : e;
       return [] as CustomerClientRow[];
     });
 
