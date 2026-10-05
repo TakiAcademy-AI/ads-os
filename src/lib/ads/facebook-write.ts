@@ -50,7 +50,7 @@ export function fbActionHint(code?: number, subcode?: number): string | null {
       + 'Người dùng hệ thống → tạo một cái vai trò Quản trị viên → Thêm tài sản: gán tài khoản '
       + 'quảng cáo (Quản lý chiến dịch) VÀ Trang (Quản lý Trang) → Tạo mã truy cập mới, chọn '
       + 'app này, tick ads_management, ads_read, business_management, pages_show_list, '
-      + 'pages_read_engagement, pages_manage_ads. Dán token đó vào Kết nối → Dán token. '
+      + 'pages_read_engagement, pages_manage_ads. Dán token đó vào Kết nối → tab Facebook → Dán token. '
       + 'System User không phải con người nên không dính chốt xác thực này, và token của nó '
       + 'không hết hạn.\n\n'
       + 'CÁCH CÒN LẠI — tự xác thực: đăng nhập Facebook bằng đúng người đã kết nối, vào Ads '

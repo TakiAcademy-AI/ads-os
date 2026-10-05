@@ -25,7 +25,7 @@ export function ConnectPanel({ oauthReady, googleReady, tiktokReady }: {
   tiktokReady: boolean;
 }) {
   const router = useRouter();
-  const [mode, setMode] = useState<'oauth' | 'google' | 'tiktok' | 'token'>(oauthReady ? 'oauth' : 'token');
+  const [mode, setMode] = useState<'oauth' | 'google' | 'tiktok'>('oauth');
   const [token, setToken] = useState('');
   const [found, setFound] = useState<Found[] | null>(null);
   const [error, setError] = useState('');
@@ -143,12 +143,12 @@ export function ConnectPanel({ oauthReady, googleReady, tiktokReady }: {
               trong tab đó. Khoá tab lại là giấu lời giải sau đúng cánh cửa mà
               nó dạy cách mở. */}
           {([
-            ['oauth', 'Facebook', oauthReady],
+            // Dán token không cần app — tab luôn dùng được, như Google và TikTok.
+            ['oauth', 'Facebook', true],
             // Service account không cần GOOGLE_ADS_CLIENT_ID — tab luôn dùng được.
             ['google', 'Google Ads', true],
             // Dán token không cần app — tab luôn dùng được.
             ['tiktok', 'TikTok', true],
-            ['token', 'Dán token (token chính)', true],
           ] as const).map(([m, label, ready]) => (
             <button key={m} onClick={() => setMode(m)}
                     style={{
@@ -173,7 +173,7 @@ export function ConnectPanel({ oauthReady, googleReady, tiktokReady }: {
                 <span className="mono">FB_APP_SECRET</span> vào <span className="mono">.env</span>,
                 và khai báo redirect URI{' '}
                 <span className="mono">{typeof window !== 'undefined' ? window.location.origin : ''}/api/connections/facebook/callback</span>{' '}
-                trong phần Facebook Login của app.
+                trong phần Facebook Login của app. Trong lúc chờ, dán token bên dưới.
               </div>
             ) : (
               <>
@@ -266,8 +266,12 @@ export function ConnectPanel({ oauthReady, googleReady, tiktokReady }: {
           </>
         )}
 
-        {mode === 'token' && (
+        {mode === 'oauth' && (
           <>
+            <div style={{ borderTop: '1px solid var(--line)', margin: '18px 0 16px' }} />
+            <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 4 }}>
+              Dán token <span className="tag tag-keep" style={{ fontSize: 10 }}>token chính</span>
+            </div>
             <div style={{ fontSize: 12.5, color: 'var(--ink-2)', marginBottom: 8 }}>
               User access token hoặc System User token
             </div>
