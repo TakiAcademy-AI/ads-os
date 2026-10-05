@@ -33,17 +33,19 @@ export interface AccountOption {
   name: string;
   externalId: string;
   currency: string;
+  /** 'facebook' | 'google' | 'tiktok' */
+  platform: string;
 }
 
 /** Tài khoản đang bật, để dựng bộ chọn. */
 export async function listActiveAccounts(ownerId: string): Promise<AccountOption[]> {
   const { rows } = await db.query(
-    `SELECT id, name, external_id, currency FROM ad_account
+    `SELECT id, name, external_id, currency, platform FROM ad_account
      WHERE owner_id = $1 AND status = 'active' ORDER BY name`,
     [ownerId],
   );
   return rows.map((r) => ({
-    id: r.id, name: r.name, externalId: r.external_id, currency: r.currency,
+    id: r.id, name: r.name, externalId: r.external_id, currency: r.currency, platform: r.platform,
   }));
 }
 

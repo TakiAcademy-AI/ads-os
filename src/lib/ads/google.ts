@@ -87,6 +87,16 @@ export function extractError(body: unknown, status: number): string {
   const reason = details.find((d) => d.reason)?.reason;
   const raw = adsErr?.message || err?.message || `Google Ads trả HTTP ${status}`;
 
+  if (code === 'BUDGET_BELOW_PER_DAY_MINIMUM') {
+    const d = (details.flatMap((x) => x.errors ?? [])[0] as {
+      details?: { budgetPerDayMinimumErrorDetails?: { budgetPerDayMinimumMicros?: string; currencyCode?: string } };
+    } | undefined)?.details?.budgetPerDayMinimumErrorDetails;
+    if (d?.budgetPerDayMinimumMicros) {
+      const min = Math.ceil(Number(d.budgetPerDayMinimumMicros) / 1_000_000);
+      return `Ngân sách thấp hơn mức tối thiểu Google cho phép với loại chiến dịch này: tối `
+        + `thiểu ${min.toLocaleString('vi-VN')} ${d.currencyCode ?? ''}/ngày.`;
+    }
+  }
   const hint = (code && HINTS[code]) || (reason && HINTS[reason]);
   return hint ? `${hint} (${code ?? reason}: ${raw})` : (code ? `${raw} (${code})` : raw);
 }
@@ -115,6 +125,12 @@ const HINTS: Record<string, string> = {
   SERVICE_DISABLED:
     'Google Ads API chưa được bật trong project Google Cloud. Vào APIs & Services → '
     + 'Library → Google Ads API → Enable, chờ vài phút rồi thử lại.',
+  CONVERSION_TRACKING_NOT_ENABLED:
+    'Tài khoản chưa bật theo dõi chuyển đổi nên chưa dùng được chiến lược "Tối đa hoá chuyển '
+    + 'đổi". Chọn "Tối đa lượt nhấp", hoặc tạo hành động chuyển đổi trong Google Ads (Mục tiêu → '
+    + 'Lượt chuyển đổi) và cài thẻ lên website trước.',
+  ASPECT_RATIO_NOT_ALLOWED:
+    'Ảnh sai tỉ lệ. Ảnh ngang phải 1.91:1 (vd 1200×628), ảnh vuông và logo phải 1:1.',
   ACCESS_TOKEN_SCOPE_INSUFFICIENT:
     'Token không có quyền adwords. Kết nối lại.',
 };
