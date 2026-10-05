@@ -297,8 +297,8 @@ export async function describeManagerChildren(
 
   const children = rows.map((r) => r.customerClient).filter((c) => c?.id && !c.manager);
   if (children.length === 0) {
-    return `MCC ${managerId} chưa liên kết tài khoản quảng cáo nào (hoặc lời mời liên kết `
-      + `chưa được chấp nhận).`;
+    return `Trong toàn bộ cây dưới MCC ${managerId} không có tài khoản quảng cáo nào (hoặc lời `
+      + `mời liên kết chưa được chấp nhận).`;
   }
   const byStatus = new Map<string, number>();
   for (const c of children) byStatus.set(c!.status ?? 'UNKNOWN', (byStatus.get(c!.status ?? 'UNKNOWN') ?? 0) + 1);

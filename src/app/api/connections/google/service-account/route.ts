@@ -45,11 +45,19 @@ export async function POST(req: Request) {
     const usable = accounts.filter((a) => !a.isManager);
     if (usable.length === 0) {
       const auth = { accessToken, developerToken: developerToken() || undefined };
-      const why = (await Promise.all(accounts.map((m) => describeManagerChildren(auth, m.id))))
+      // Chỉ hỏi ở MCC GỐC: customer_client từ gốc đã trả cả cây con. Hỏi ở MCC
+      // con bằng chính ID của nó thì bị từ chối quyền nếu service account
+      // không được thêm trực tiếp vào đó.
+      const roots = accounts.filter((m) => !m.loginCustomerId);
+      const why = (await Promise.all(roots.map((m) => describeManagerChildren(auth, m.id))))
         .filter(Boolean).join(' ');
+      const fmt = (id: string) => id.replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3');
+      const list = accounts.map((m) => `${m.name} (${fmt(m.id)}`
+        + (m.loginCustomerId ? `, nằm dưới ${fmt(m.loginCustomerId)})` : ')')).join('; ');
       return NextResponse.json({
-        error: `Chỉ thấy ${accounts.length} tài khoản quản lý (MCC), không có tài khoản quảng cáo `
-          + `nào đang hoạt động. ${why} Cách sửa: trong MCC vào Tài khoản → dấu + → Liên kết `
+        error: `Chỉ thấy ${accounts.length} tài khoản quản lý (MCC): ${list}. Không có tài khoản `
+          + `quảng cáo nào đang hoạt động. ${why} Tài khoản quảng cáo là nơi trực tiếp tạo `
+          + `chiến dịch; MCC chỉ để quản lý các tài khoản khác. Cách sửa: trong MCC vào Tài khoản → dấu + → Liên kết `
           + `tài khoản hiện có và chấp nhận lời mời ở tài khoản quảng cáo; hoặc thêm `
           + `${key.client_email} trực tiếp vào tài khoản quảng cáo (Quản trị → Quyền truy cập `
           + `và bảo mật).`,
