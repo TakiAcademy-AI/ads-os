@@ -35,6 +35,9 @@ export interface GoogleCreateSpec {
   images?: { landscape: string[]; square: string[]; logo: string[] };
 }
 
+/** geoTargetConstants/2704 */
+export const VIETNAM = '2704';
+
 /** Giới hạn của Google cho từng loại — dùng cả để validate lẫn hiện ở giao diện. */
 export const LIMITS: Record<GoogleCampaignKind, {
   headlines: [number, number, number];
@@ -96,6 +99,11 @@ export function checkSpec(s: GoogleCreateSpec): string[] {
   }
   if (!L.bidding.includes(s.bidding)) errs.push('Chiến lược giá thầu không dùng được cho loại chiến dịch này');
   if (s.geoTargets.length === 0) errs.push('Chọn ít nhất một vị trí');
+  // Google nhắm HỢP các vị trí: "Việt Nam" + "Hà Nội" = cả nước. Gần như chắc
+  // chắn người dùng muốn thu hẹp nhưng quên bỏ quốc gia.
+  if (s.geoTargets.includes(VIETNAM) && s.geoTargets.length > 1) {
+    errs.push('Đang chọn cả "Việt Nam" lẫn tỉnh/thành — Google sẽ chạy cả nước. Bỏ Việt Nam nếu chỉ muốn chạy ở tỉnh/thành đã chọn');
+  }
   if ((s.path1 ?? '').length > 15 || (s.path2 ?? '').length > 15) errs.push('Đường dẫn hiển thị tối đa 15 ký tự');
   try {
     const u = new URL(s.finalUrl);

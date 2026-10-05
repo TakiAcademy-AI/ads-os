@@ -107,7 +107,7 @@ function TextList({ items, setItems, range, placeholder }: {
   );
 }
 
-interface Geo { id: string; name: string; canonical: string }
+interface Geo { id: string; name: string; canonical: string; type?: string }
 
 function GeoPicker({ accountId, value, onChange }: {
   accountId: string; value: Geo[]; onChange: (v: Geo[]) => void;
@@ -146,7 +146,18 @@ function GeoPicker({ accountId, value, onChange }: {
         <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', marginTop: 4, maxHeight: 220, overflowY: 'auto' }}>
           {items.map((g) => (
             <button key={g.id} type="button"
-                    onClick={() => { if (!value.some((x) => x.id === g.id)) onChange([...value, g]); setQ(''); setItems([]); }}
+                    onClick={() => {
+                      if (!value.some((x) => x.id === g.id)) {
+                        // Google nhắm HỢP của các vị trí: giữ "Việt Nam" cạnh "Hà Nội"
+                        // là vẫn chạy cả nước — đã xảy ra thật với chiến dịch đầu tiên.
+                        // Thêm vị trí nhỏ hơn thì bỏ quốc gia; thêm quốc gia thì bỏ
+                        // các vị trí nhỏ hơn.
+                        const isCountry = g.type === 'Country';
+                        const kept = value.filter((x) => (isCountry ? x.type === 'Country' : x.type !== 'Country'));
+                        onChange([...kept, g]);
+                      }
+                      setQ(''); setItems([]);
+                    }}
                     style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 11px', border: 0,
                              borderBottom: '1px solid var(--line)', background: 'transparent', cursor: 'pointer',
                              fontFamily: 'inherit', fontSize: 13, color: 'var(--ink-2)' }}>
@@ -216,7 +227,7 @@ export function GoogleQuickAd({ accounts, defaultAccountId }: {
   const [budget, setBudget] = useState('200000');
   const [bidding, setBidding] = useState<GoogleBidding>('MAXIMIZE_CLICKS');
   const [targetCpa, setTargetCpa] = useState('');
-  const [geos, setGeos] = useState<Geo[]>([{ id: '2704', name: 'Việt Nam', canonical: 'Vietnam' }]);
+  const [geos, setGeos] = useState<Geo[]>([{ id: '2704', name: 'Việt Nam', canonical: 'Vietnam', type: 'Country' }]);
   const [langs, setLangs] = useState<string[]>(['1040']);
   const [finalUrl, setFinalUrl] = useState('https://');
   const [path1, setPath1] = useState('');
@@ -312,8 +323,15 @@ export function GoogleQuickAd({ accounts, defaultAccountId }: {
           <div style={{ background: 'var(--grn-soft)', color: 'var(--grn)', padding: '13px 15px',
                         borderRadius: 'var(--r-sm)', fontSize: 13.5, lineHeight: 1.6, marginBottom: 14 }}>
             <b>Chiến dịch đã tạo và đang TẠM DỪNG — chưa tiêu đồng nào.</b>
-            <br />Vào Google Ads kiểm tra lại rồi tự bật khi bạn thấy ổn. Google còn duyệt
-            quảng cáo trước khi hiển thị.
+            <br />Vào Google Ads kiểm tra lại rồi tự bật khi bạn thấy ổn.
+          </div>
+          <div className="note" style={{ maxWidth: 'none', margin: '0 0 14px', lineHeight: 1.7 }}>
+            <b>Google sẽ ghi nhóm quảng cáo và quảng cáo là &ldquo;Không đủ điều kiện&rdquo; — đó
+            là bình thường</b>, vì hai lý do: chiến dịch đang tạm dừng, và quảng cáo đang chờ
+            Google duyệt (thường trong 1 ngày làm việc). Bật chiến dịch xong và quảng cáo được
+            duyệt thì trạng thái chuyển sang &ldquo;Đủ điều kiện&rdquo;. Nếu sau 2 ngày vẫn còn
+            &ldquo;Đang xem xét&rdquo; hoặc bị &ldquo;Từ chối&rdquo;, vào cột Trạng thái của quảng
+            cáo trong Google Ads để xem lý do.
           </div>
           <div className="mono" style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>chiến dịch {created.campaignId}</div>
           <div style={{ display: 'flex', gap: 9, marginTop: 16 }}>
@@ -384,7 +402,7 @@ export function GoogleQuickAd({ accounts, defaultAccountId }: {
                 Google từ chối — chọn Tối đa lượt nhấp.
               </div>
             )}
-            <Field label="Vị trí" hint="Mặc định cả Việt Nam. Thêm tỉnh/thành để thu hẹp — nhớ bỏ Việt Nam đi nếu chỉ muốn chạy ở đó.">
+            <Field label="Vị trí" hint="Mặc định cả Việt Nam. Thêm tỉnh/thành thì Việt Nam tự được bỏ, để quảng cáo chỉ chạy ở nơi bạn chọn.">
               <GeoPicker accountId={accountId} value={geos} onChange={setGeos} />
             </Field>
             <Field label="Ngôn ngữ">
