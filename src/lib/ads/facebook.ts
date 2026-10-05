@@ -109,6 +109,11 @@ async function graphAll<T>(
   return out;
 }
 
+/** Đọc một đối tượng Graph bất kỳ — cho trang chi tiết chiến dịch. */
+export const fbGet = graph;
+/** Đọc một cạnh có phân trang (adsets, ads…). */
+export const fbGetAll = graphAll;
+
 // ─── Tài khoản quảng cáo ─────────────────────────────────────────────────────
 
 export interface FbAdAccount {

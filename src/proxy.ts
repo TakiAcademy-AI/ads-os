@@ -26,7 +26,7 @@ const sessionOptions = {
 /** Route đổi dữ liệu. Khớp theo tiền tố đường dẫn. */
 const MUTATING_PREFIXES = [
   '/api/configs', '/api/connections', '/api/templates',
-  '/api/keys', '/api/pages', '/api/ads', '/api/users',
+  '/api/keys', '/api/pages', '/api/ads', '/api/users', '/api/campaigns',
 ];
 
 /**

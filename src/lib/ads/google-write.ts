@@ -22,7 +22,8 @@ const TIMEOUT_MS = 25_000;
 async function mutate(
   auth: GoogleAuth,
   customerId: string,
-  resource: 'campaigns' | 'campaignBudgets',
+  resource: 'campaigns' | 'campaignBudgets' | 'campaignCriteria' | 'adGroups'
+    | 'adGroupAds' | 'adGroupCriteria' | 'assetGroups',
   operations: unknown[],
   validateOnly = false,
 ): Promise<void> {
@@ -175,4 +176,106 @@ export async function readCampaignBudget(
 ): Promise<number | null> {
   const info = await getBudgetInfo(auth, customerId, campaignId).catch(() => null);
   return info?.amountMicros ?? null;
+}
+
+// ─── Chỉnh sửa từ trang chi tiết chiến dịch ──────────────────────────────────
+//
+// Mỗi hàm một thay đổi, gọi tay từ người dùng. Vẫn không thử lại, vẫn không có
+// thao tác REMOVE chiến dịch/nhóm/quảng cáo — chỉ tạm dừng được, vì xoá trên
+// Google không hoàn tác được. Riêng tiêu chí (vị trí, từ khoá) thì xoá được: đó
+// là cách duy nhất để bỏ chúng, và thêm lại là xong.
+
+const digits = (x: string) => x.replace(/\D/g, '');
+
+export async function renameCampaign(
+  auth: GoogleAuth, customerId: string, campaignId: string, name: string,
+): Promise<void> {
+  const cid = digits(customerId);
+  await mutate(auth, customerId, 'campaigns', [{
+    update: { resourceName: `customers/${cid}/campaigns/${digits(campaignId)}`, name },
+    updateMask: 'name',
+  }]);
+}
+
+export async function setAdGroupStatus(
+  auth: GoogleAuth, customerId: string, adGroupId: string, status: CampaignStatus,
+): Promise<void> {
+  const cid = digits(customerId);
+  await mutate(auth, customerId, 'adGroups', [{
+    update: { resourceName: `customers/${cid}/adGroups/${digits(adGroupId)}`, status },
+    updateMask: 'status',
+  }]);
+}
+
+/** Performance Max không có nhóm quảng cáo — đơn vị tương đương là nhóm tài sản. */
+export async function setAssetGroupStatus(
+  auth: GoogleAuth, customerId: string, assetGroupId: string, status: CampaignStatus,
+): Promise<void> {
+  const cid = digits(customerId);
+  await mutate(auth, customerId, 'assetGroups', [{
+    update: { resourceName: `customers/${cid}/assetGroups/${digits(assetGroupId)}`, status },
+    updateMask: 'status',
+  }]);
+}
+
+/** Quảng cáo Google định danh bằng CẶP nhóm~quảng cáo, không phải ID quảng cáo trơn. */
+export async function setAdStatus(
+  auth: GoogleAuth, customerId: string, adGroupId: string, adId: string, status: CampaignStatus,
+): Promise<void> {
+  const cid = digits(customerId);
+  await mutate(auth, customerId, 'adGroupAds', [{
+    update: { resourceName: `customers/${cid}/adGroupAds/${digits(adGroupId)}~${digits(adId)}`, status },
+    updateMask: 'status',
+  }]);
+}
+
+export async function addCampaignLocations(
+  auth: GoogleAuth, customerId: string, campaignId: string, geoIds: string[],
+): Promise<void> {
+  const cid = digits(customerId);
+  const campaign = `customers/${cid}/campaigns/${digits(campaignId)}`;
+  await mutate(auth, customerId, 'campaignCriteria', geoIds.map((g) => ({
+    create: { campaign, location: { geoTargetConstant: `geoTargetConstants/${digits(g)}` } },
+  })));
+}
+
+export async function removeCampaignCriterion(
+  auth: GoogleAuth, customerId: string, campaignId: string, criterionId: string,
+): Promise<void> {
+  const cid = digits(customerId);
+  await mutate(auth, customerId, 'campaignCriteria', [{
+    remove: `customers/${cid}/campaignCriteria/${digits(campaignId)}~${digits(criterionId)}`,
+  }]);
+}
+
+export type KeywordMatch = 'BROAD' | 'PHRASE' | 'EXACT';
+
+export async function addKeywords(
+  auth: GoogleAuth, customerId: string, adGroupId: string,
+  keywords: { text: string; matchType: KeywordMatch }[],
+): Promise<void> {
+  const cid = digits(customerId);
+  const adGroup = `customers/${cid}/adGroups/${digits(adGroupId)}`;
+  await mutate(auth, customerId, 'adGroupCriteria', keywords.map((k) => ({
+    create: { adGroup, status: 'ENABLED', keyword: { text: k.text, matchType: k.matchType } },
+  })));
+}
+
+export async function setKeywordStatus(
+  auth: GoogleAuth, customerId: string, adGroupId: string, criterionId: string, status: CampaignStatus,
+): Promise<void> {
+  const cid = digits(customerId);
+  await mutate(auth, customerId, 'adGroupCriteria', [{
+    update: { resourceName: `customers/${cid}/adGroupCriteria/${digits(adGroupId)}~${digits(criterionId)}`, status },
+    updateMask: 'status',
+  }]);
+}
+
+export async function removeKeyword(
+  auth: GoogleAuth, customerId: string, adGroupId: string, criterionId: string,
+): Promise<void> {
+  const cid = digits(customerId);
+  await mutate(auth, customerId, 'adGroupCriteria', [{
+    remove: `customers/${cid}/adGroupCriteria/${digits(adGroupId)}~${digits(criterionId)}`,
+  }]);
 }

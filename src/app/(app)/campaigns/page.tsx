@@ -5,12 +5,14 @@ import { listCampaigns, type CampaignRow } from '@/lib/queries/ads';
 import { getPauseConfig } from '@/lib/queries/configs';
 import { vnd, num, OBJECTIVE_LABEL } from '@/lib/format';
 import { SyncButton } from '../connections/sync-button';
+import { db } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-/** Facebook trả trạng thái bằng tiếng Anh viết hoa. */
+/** Facebook và Google trả trạng thái bằng tiếng Anh viết hoa. */
 const CAMPAIGN_STATUS: Record<string, string> = {
   ACTIVE: 'đang chạy',
+  ENABLED: 'đang chạy',
   PAUSED: 'đã tắt',
   ARCHIVED: 'đã lưu trữ',
   DELETED: 'đã xoá',
@@ -29,7 +31,9 @@ function Row({ c }: { c: CampaignRow }) {
   return (
     <tr>
       <td>
-        <div className="cell-title">{c.name}</div>
+        <Link href={`/campaigns/${c.id}`} className="cell-title" style={{ color: 'var(--acc-ink)' }}>
+          {c.name}
+        </Link>
         <div className="cell-sub">
           {OBJECTIVE_LABEL[c.objective] ?? c.objective} · {CAMPAIGN_STATUS[c.status.toUpperCase()] ?? c.status} · {num(c.conversions)} kết quả
           {c.isWhitelisted && <> · <span className="tag tag-mute">được bảo vệ</span></>}
@@ -97,10 +101,12 @@ export default async function CampaignsPage() {
     );
   }
 
-  const [campaigns, pauseConfig] = await Promise.all([
+  const [campaigns, pauseConfig, { rows: acct }] = await Promise.all([
     listCampaigns(accountId, 30, todayVn()),
     getPauseConfig(accountId),
+    db.query(`SELECT platform FROM ad_account WHERE id = $1`, [accountId]),
   ]);
+  const platformLabel = acct[0]?.platform === 'google' ? 'Google Ads' : 'Facebook Ads';
   const saved = campaigns.filter((c) => c.assessment.verdict === 'saved');
   // Có chi tiêu nhưng hệ thống không biết đếm chuyển đổi kiểu gì → CPA vô nghĩa,
   // guard không bao giờ đụng tới. Người dùng phải biết mình đang mù chỗ nào.
@@ -111,7 +117,7 @@ export default async function CampaignsPage() {
       <div className="page-head">
         <div>
           <h1>Chiến dịch</h1>
-          <p>Facebook Ads · 30 ngày · {campaigns.length} chiến dịch</p>
+          <p>{platformLabel} · 30 ngày · {campaigns.length} chiến dịch · bấm tên để xem chi tiết và chỉnh sửa</p>
         </div>
         <SyncButton accountId={accountId} />
       </div>

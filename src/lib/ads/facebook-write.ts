@@ -161,3 +161,32 @@ export async function readCampaignStatus(
   const json = (await res.json().catch(() => ({}))) as { status?: string };
   return json.status ?? null;
 }
+
+// ─── Chỉnh sửa từ trang chi tiết chiến dịch ──────────────────────────────────
+//
+// Facebook dùng chung một kiểu ghi cho chiến dịch, nhóm quảng cáo và quảng cáo:
+// POST /<id> với trường cần đổi. Vẫn không thử lại, vẫn không có xoá/lưu trữ.
+
+/** Đổi tên chiến dịch, nhóm quảng cáo hoặc quảng cáo. */
+export async function renameObject(token: string, objectId: string, name: string): Promise<void> {
+  await write(`/${objectId}`, { name }, token);
+}
+
+/** Bật/tạm dừng nhóm quảng cáo hoặc quảng cáo. */
+export async function setObjectStatus(
+  token: string, objectId: string, status: CampaignStatus,
+): Promise<void> {
+  await write(`/${objectId}`, { status }, token);
+}
+
+/**
+ * Đổi ngân sách/ngày của NHÓM quảng cáo — dùng khi chiến dịch không đặt ngân
+ * sách ở cấp chiến dịch (ABO). Cùng quy tắc đơn vị với setCampaignDailyBudget.
+ */
+export async function setAdSetDailyBudget(
+  token: string, adSetId: string, budgetMicros: number, currency: string,
+): Promise<void> {
+  const value = microsToMinor(budgetMicros, currency);
+  if (value <= 0) throw new FacebookWriteError('Ngân sách phải lớn hơn 0');
+  await write(`/${adSetId}`, { daily_budget: String(value) }, token);
+}
