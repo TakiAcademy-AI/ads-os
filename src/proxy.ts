@@ -41,8 +41,26 @@ function isReadOnly(path: string, method: string): boolean {
   return false;
 }
 
+/**
+ * Trang chủ "/" cho người CHƯA đăng nhập là trang giới thiệu, không phải màn
+ * hình đăng nhập. Google từ chối duyệt OAuth consent screen khi trang chủ nằm
+ * sau đăng nhập hoặc không nói app làm gì. Rewrite chứ không redirect: URL
+ * vẫn là "/" nên bot của Google thấy nội dung ngay tại địa chỉ đã khai.
+ */
+async function landingForGuests(req: NextRequest): Promise<NextResponse> {
+  if (!sessionOptions.password) return NextResponse.next();
+  try {
+    const session = await getIronSession<SessionData>(req, NextResponse.next(), sessionOptions);
+    if (session.userId) return NextResponse.next();
+  } catch {
+    // Cookie hỏng — coi như chưa đăng nhập.
+  }
+  return NextResponse.rewrite(new URL('/gioi-thieu', req.url));
+}
+
 export default async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  if (pathname === '/') return landingForGuests(req);
   if (!MUTATING_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
   if (isReadOnly(pathname, req.method)) return NextResponse.next();
   if (!sessionOptions.password) return NextResponse.next();
@@ -76,5 +94,5 @@ export default async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/:path*'],
+  matcher: ['/', '/api/:path*'],
 };
