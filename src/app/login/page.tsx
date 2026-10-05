@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { LegalLinks } from '../_legal/shell';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -59,6 +60,8 @@ export default function LoginPage() {
         <button className="btn" type="submit" disabled={busy} style={{ width: '100%', marginTop: 6 }}>
           {busy ? 'Đang kiểm tra…' : 'Đăng nhập'}
         </button>
+
+        <LegalLinks style={{ justifyContent: 'center', marginTop: 20 }} />
       </form>
     </div>
   );

@@ -2,6 +2,7 @@
 // thích cách xoá dữ liệu, và là nơi người dùng tra cứu mã xác nhận.
 
 import { db } from '@/lib/db';
+import { LegalLinks } from '../_legal/shell';
 
 export const dynamic = 'force-dynamic';
 
@@ -135,6 +136,7 @@ export default async function DataDeletionPage({
 
       <div style={{ fontSize: 13, color: 'var(--dim)', borderTop: '1px solid var(--line)', paddingTop: 16 }}>
         Cần hỗ trợ? Liên hệ <span className="mono">ai@taki.vn</span>
+        <LegalLinks style={{ marginTop: 12 }} />
       </div>
     </div>
   );
