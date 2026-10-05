@@ -335,11 +335,12 @@ export default async function GuidePage() {
               </tbody>
             </table>
             <div className="note" style={{ maxWidth: 'none', marginTop: 12 }}>
-              Google Ads API cần một <b>developer token</b> xin ở tài khoản quản lý,
-              mục API Center. Token mới chỉ có quyền <b>Test</b> — chỉ gọi được tài
-              khoản thử nghiệm. Muốn chạy tài khoản thật phải nộp đơn xin <b>Basic
-              access</b> và chờ Google duyệt. Đây là rào của Google, không phải của
-              Ads OS.
+              Từ 9/9/2026 Google <b>bỏ developer token</b>: cấp truy cập API gắn với{' '}
+              <b>project Google Cloud</b> chứa OAuth client. Project mới chỉ có cấp{' '}
+              <b>Test</b> — chỉ gọi được tài khoản thử nghiệm. Muốn chạy tài khoản thật,
+              vào trang <b>Tổng quan Google Ads API</b> của project trong Google Cloud
+              Console và đăng ký <b>Explorer</b> hoặc <b>Basic</b> (Basic cần xác minh
+              thương hiệu). Đây là rào của Google, không phải của Ads OS.
             </div>
           </Section>
 

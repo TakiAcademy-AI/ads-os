@@ -17,11 +17,9 @@ const inputStyle: React.CSSProperties = {
   background: 'var(--card)', color: 'var(--ink)',
 };
 
-export function ConnectPanel({ oauthReady, googleReady, googleDevToken }: {
+export function ConnectPanel({ oauthReady, googleReady }: {
   oauthReady: boolean;
   googleReady: boolean;
-  /** Đã có GOOGLE_ADS_DEVELOPER_TOKEN chưa — thiếu thì Google Ads API từ chối mọi lời gọi. */
-  googleDevToken: boolean;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<'oauth' | 'google' | 'token'>(oauthReady ? 'oauth' : 'token');
@@ -199,9 +197,8 @@ export function ConnectPanel({ oauthReady, googleReady, googleDevToken }: {
           <>
             {!googleReady ? (
               <div style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
-                Chưa cấu hình app Google. Thêm <span className="mono">GOOGLE_ADS_CLIENT_ID</span>,{' '}
-                <span className="mono">GOOGLE_ADS_CLIENT_SECRET</span> và{' '}
-                <span className="mono">GOOGLE_ADS_DEVELOPER_TOKEN</span> vào{' '}
+                Chưa cấu hình app Google. Thêm <span className="mono">GOOGLE_ADS_CLIENT_ID</span> và{' '}
+                <span className="mono">GOOGLE_ADS_CLIENT_SECRET</span> vào{' '}
                 <span className="mono">.env</span>, và khai redirect URI{' '}
                 <span className="mono">
                   {typeof window !== 'undefined' ? window.location.origin : ''}/api/connections/google/callback
@@ -210,12 +207,6 @@ export function ConnectPanel({ oauthReady, googleReady, googleDevToken }: {
               </div>
             ) : (
               <>
-                {!googleDevToken && (
-                  <div className="err" style={{ marginBottom: 12 }}>
-                    Thiếu <span className="mono">GOOGLE_ADS_DEVELOPER_TOKEN</span>. Đăng nhập
-                    vẫn chạy nhưng Google Ads API sẽ từ chối mọi lời gọi sau đó.
-                  </div>
-                )}
                 <button className="btn" onClick={() => startOauth('google')} disabled={busy}
                         style={{ background: '#1A73E8', fontSize: 14, padding: '11px 20px' }}>
                   {busy ? 'Đang chờ cửa sổ Google…' : 'Đăng nhập bằng Google'}

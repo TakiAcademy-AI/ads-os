@@ -28,14 +28,6 @@ export class GoogleSetupError extends Error {
  * gộp hết thành "không kết nối được" thì người dùng không biết phải sửa gì.
  */
 export async function googleSession(adAccountId: string): Promise<GoogleSession> {
-  const devToken = developerToken();
-  if (!devToken) {
-    throw new GoogleSetupError(
-      'Thiếu GOOGLE_ADS_DEVELOPER_TOKEN. Xin ở tài khoản quản lý Google Ads, '
-      + 'mục API Center.',
-    );
-  }
-
   // Không cần origin ở đây vì chỉ dùng clientId/clientSecret để đổi token.
   const cfg = googleOauthConfig('');
   if (!cfg) {
@@ -69,7 +61,7 @@ export async function googleSession(adAccountId: string): Promise<GoogleSession>
   return {
     auth: {
       accessToken,
-      developerToken: devToken,
+      developerToken: developerToken() || undefined,
       loginCustomerId: rows[0].login_customer_id as string | null,
     },
     customerId: rows[0].external_id as string,

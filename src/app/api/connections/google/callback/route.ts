@@ -37,7 +37,14 @@ export async function GET(req: Request) {
 
   const denied = url.searchParams.get('error');
   if (denied) {
-    return html(origin, { ok: false, error: url.searchParams.get('error_description') ?? denied });
+    // access_denied: người dùng bấm Huỷ, HOẶC app đang ở chế độ Testing mà
+    // email không nằm trong Test users — Google không phân biệt hai trường hợp.
+    const msg = denied === 'access_denied'
+      ? 'Google từ chối cấp quyền. Nếu bạn không bấm Huỷ thì thường là app OAuth đang ở '
+        + 'chế độ Testing và email này chưa có trong Test users (Google Cloud Console → '
+        + 'OAuth consent screen).'
+      : url.searchParams.get('error_description') ?? denied;
+    return html(origin, { ok: false, error: msg });
   }
 
   const code = url.searchParams.get('code');
@@ -57,8 +64,6 @@ export async function GET(req: Request) {
 
   const cfg = googleOauthConfig(origin);
   if (!cfg) return html(origin, { ok: false, error: 'Chưa cấu hình app Google' }, 503);
-  const devToken = developerToken();
-  if (!devToken) return html(origin, { ok: false, error: 'Thiếu GOOGLE_ADS_DEVELOPER_TOKEN' }, 503);
 
   try {
     // exchangeCode ném lỗi nếu Google không trả refresh token — đó là hỏng
@@ -68,7 +73,7 @@ export async function GET(req: Request) {
     const accessToken = await accessTokenFrom(cfg, refreshToken);
 
     const accounts = await listAdAccounts({
-      accessToken, developerToken: devToken,
+      accessToken, developerToken: developerToken() || undefined,
     });
     if (accounts.length === 0) {
       return html(origin, {

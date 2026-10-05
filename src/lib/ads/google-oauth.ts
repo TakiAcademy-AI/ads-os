@@ -36,7 +36,10 @@ export function googleOauthConfig(origin: string): GoogleOAuthConfig | null {
   return { clientId, clientSecret, redirectUri };
 }
 
-/** Developer token — Google Ads API không chạy được nếu thiếu. */
+/**
+ * Developer token — KHÔNG CÒN BẮT BUỘC. Google bỏ nó từ 9/9/2026, cấp truy cập
+ * giờ gắn với project Google Cloud. Còn khai thì vẫn gửi, để trống cũng được.
+ */
 export function developerToken(): string {
   return process.env.GOOGLE_ADS_DEVELOPER_TOKEN || '';
 }
@@ -53,7 +56,9 @@ export function authUrl(cfg: GoogleOAuthConfig, state: string): string {
   //   prompt=consent       — ép hỏi lại, nếu không Google bỏ qua refresh token
   //                          ở những lần cấp quyền sau lần đầu
   u.searchParams.set('access_type', 'offline');
-  u.searchParams.set('prompt', 'consent');
+  //   select_account — Chrome đăng nhập nhiều tài khoản thì ép hỏi chọn, không
+  //                    thì Google có thể tự lấy nhầm tài khoản không có quyền Ads
+  u.searchParams.set('prompt', 'select_account consent');
   u.searchParams.set('include_granted_scopes', 'true');
   return u.toString();
 }

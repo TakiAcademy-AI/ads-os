@@ -6,10 +6,10 @@
 // KHÔNG có logic quyết định ở đây. Quyết định nằm ở lib/automation/ với đầy đủ
 // guard; file này chỉ thực thi một lệnh đã được duyệt.
 
-import { GoogleAdsError, gaql, type GoogleAuth } from './google';
+import { GoogleAdsError, gaql, extractError, type GoogleAuth } from './google';
 
 const HOST = 'https://googleads.googleapis.com';
-const VERSION = process.env.GOOGLE_ADS_API_VERSION || 'v21';
+const VERSION = process.env.GOOGLE_ADS_API_VERSION || 'v25';
 const TIMEOUT_MS = 25_000;
 
 /**
@@ -29,9 +29,9 @@ async function mutate(
   const cid = customerId.replace(/\D/g, '');
   const h: Record<string, string> = {
     Authorization: `Bearer ${auth.accessToken}`,
-    'developer-token': auth.developerToken,
     'Content-Type': 'application/json',
   };
+  if (auth.developerToken) h['developer-token'] = auth.developerToken;
   if (auth.loginCustomerId) h['login-customer-id'] = auth.loginCustomerId.replace(/\D/g, '');
 
   const res = await fetch(`${HOST}/${VERSION}/customers/${cid}/${resource}:mutate`, {
@@ -44,12 +44,7 @@ async function mutate(
   });
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as {
-      error?: { message?: string; details?: { errors?: { message?: string }[] }[] };
-    };
-    const msg = body.error?.details?.[0]?.errors?.[0]?.message
-      || body.error?.message
-      || `Google Ads trả HTTP ${res.status}`;
+    const msg = extractError(await res.json().catch(() => ({})), res.status);
     throw new GoogleAdsError(msg, res.status, res.status === 401 || res.status === 403);
   }
 }

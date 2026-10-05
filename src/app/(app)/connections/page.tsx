@@ -2,7 +2,7 @@ import { requireUser } from '@/lib/session';
 import { db } from '@/lib/db';
 import { dateTime } from '@/lib/format';
 import { oauthConfig } from '@/lib/ads/facebook-oauth';
-import { googleOauthConfig, developerToken } from '@/lib/ads/google-oauth';
+import { googleOauthConfig } from '@/lib/ads/google-oauth';
 import { ConnectPanel } from './connect-panel';
 import { AccountActions } from './account-actions';
 import { SyncButton } from './sync-button';
@@ -61,7 +61,6 @@ export default async function ConnectionsPage() {
       <ConnectPanel
         oauthReady={oauthConfig('http://x') !== null}
         googleReady={googleOauthConfig('http://x') !== null}
-        googleDevToken={developerToken() !== ''}
       />
 
       <div className="card" style={{ marginBottom: 16 }}>

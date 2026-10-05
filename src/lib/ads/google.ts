@@ -12,11 +12,16 @@
 //    (`metrics.conversions`). Không có mớ action_type trùng lặp như Facebook,
 //    nên không có bẫy cộng dồn đếm ba lần.
 //
-// 3. MỌI LỜI GỌI PHẢI KÈM developer-token, và nếu tài khoản nằm dưới một tài
-//    khoản quản lý thì phải kèm cả login-customer-id.
+// 3. Tài khoản nằm dưới một tài khoản quản lý thì phải kèm login-customer-id.
+//
+// DEVELOPER TOKEN ĐÃ BỊ BỎ từ 9/9/2026. Cấp truy cập API (Test/Explorer/Basic/
+// Standard) giờ gắn với PROJECT GOOGLE CLOUD chứa OAuth client, không gắn với
+// token. Header developer-token vẫn được chấp nhận nhưng bị bỏ qua, và sẽ bị
+// từ chối ở một bản API lớn sau này — nên chỉ gửi khi .env còn khai.
+// https://developers.google.com/google-ads/api/docs/api-policy/developer-token
 
 const HOST = 'https://googleads.googleapis.com';
-const VERSION = process.env.GOOGLE_ADS_API_VERSION || 'v21';
+const VERSION = process.env.GOOGLE_ADS_API_VERSION || 'v25';
 const TIMEOUT_MS = 30_000;
 const MAX_RETRY = 3;
 
@@ -34,7 +39,8 @@ export class GoogleAdsError extends Error {
 
 export interface GoogleAuth {
   accessToken: string;
-  developerToken: string;
+  /** Đã bị Google bỏ — chỉ gửi nếu còn khai trong .env. Xem ghi chú đầu file. */
+  developerToken?: string;
   /** ID tài khoản quản lý, chỉ chữ số. Bỏ trống nếu tài khoản đứng độc lập. */
   loginCustomerId?: string | null;
 }
@@ -42,22 +48,42 @@ export interface GoogleAuth {
 function headers(auth: GoogleAuth): Record<string, string> {
   const h: Record<string, string> = {
     Authorization: `Bearer ${auth.accessToken}`,
-    'developer-token': auth.developerToken,
     'Content-Type': 'application/json',
   };
+  if (auth.developerToken) h['developer-token'] = auth.developerToken;
   // Thiếu header này khi tài khoản nằm dưới MCC thì Google trả lỗi quyền, và
   // thông báo lỗi KHÔNG hề nhắc tới header còn thiếu.
   if (auth.loginCustomerId) h['login-customer-id'] = auth.loginCustomerId.replace(/\D/g, '');
   return h;
 }
 
+/**
+ * Lỗi nghĩa là project Google Cloud mới ở cấp truy cập Test — chỉ gọi được tài
+ * khoản thử nghiệm. Bản API cũ trả ACTION_NOT_PERMITTED, từ v25 trả
+ * CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION. Thông điệp gốc của Google không
+ * hề nhắc tới cách sửa, nên phải dịch ra.
+ */
+const PROJECT_NOT_APPROVED = new Set([
+  'CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION', 'ACTION_NOT_PERMITTED',
+  'DEVELOPER_TOKEN_NOT_APPROVED',
+]);
+
 /** Bóc thông điệp lỗi có ích ra khỏi vỏ lỗi nhiều tầng của Google. */
-function extractError(body: unknown, status: number): string {
+export function extractError(body: unknown, status: number): string {
   const b = body as {
-    error?: { message?: string; details?: { errors?: { message?: string }[] }[] };
+    error?: {
+      message?: string;
+      details?: { errors?: { message?: string; errorCode?: Record<string, string> }[] }[];
+    };
   } | undefined;
-  const detail = b?.error?.details?.[0]?.errors?.[0]?.message;
-  return detail || b?.error?.message || `Google Ads trả HTTP ${status}`;
+  const first = b?.error?.details?.[0]?.errors?.[0];
+  const code = first?.errorCode ? Object.values(first.errorCode)[0] : undefined;
+  if (code && PROJECT_NOT_APPROVED.has(code)) {
+    return `Project Google Cloud của OAuth client đang ở cấp truy cập Test, chỉ gọi được `
+      + `tài khoản thử nghiệm (${code}). Vào Google Cloud Console → trang Tổng quan `
+      + `Google Ads API của project đó, đăng ký quyền Explorer hoặc Basic.`;
+  }
+  return first?.message || b?.error?.message || `Google Ads trả HTTP ${status}`;
 }
 
 async function call<T>(
@@ -171,6 +197,12 @@ interface CustomerClientRow {
 export async function listAdAccounts(auth: GoogleAuth): Promise<GoogleAdAccount[]> {
   const roots = await listAccessibleCustomers(auth);
   const seen = new Map<string, GoogleAdAccount>();
+  // Một gốc lỗi thì bỏ qua để vẫn lấy được các gốc khác. Nhưng TẤT CẢ đều lỗi
+  // thì phải báo lỗi gốc — nuốt hết thành mảng rỗng là người dùng chỉ thấy
+  // "không có tài khoản nào" trong khi nguyên nhân thật là project chưa được
+  // duyệt cấp truy cập.
+  let firstError: unknown = null;
+  let okRoots = 0;
 
   for (const root of roots) {
     // Truy vấn customer_client từ gốc trả về cả chính nó lẫn toàn bộ cây con.
@@ -182,7 +214,10 @@ export async function listAdAccounts(auth: GoogleAuth): Promise<GoogleAdAccount[
               customer_client.manager, customer_client.status
        FROM customer_client
        WHERE customer_client.status = 'ENABLED'`,
-    ).catch(() => [] as CustomerClientRow[]);
+    ).then((r) => { okRoots++; return r; }, (e) => {
+      firstError ??= e;
+      return [] as CustomerClientRow[];
+    });
 
     for (const r of rows) {
       const c = r.customerClient;
@@ -200,6 +235,7 @@ export async function listAdAccounts(auth: GoogleAuth): Promise<GoogleAdAccount[
       });
     }
   }
+  if (roots.length > 0 && okRoots === 0 && firstError) throw firstError;
   return [...seen.values()];
 }
 
