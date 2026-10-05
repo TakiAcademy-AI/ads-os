@@ -4,7 +4,7 @@
 // chỉ phải sửa một chỗ.
 
 import { db } from '../db';
-import { syncAccount, type SyncResult } from './sync';
+import { syncAccount, logSync, type SyncResult } from './sync';
 import { syncGoogleAccount } from './google-sync';
 
 export type { SyncResult };
@@ -21,7 +21,11 @@ export async function syncAnyAccount(
   if (platform === 'google') {
     // Google chưa hỗ trợ cấp adset/ad và chỉ số kéo thêm — bỏ qua hai tham số
     // đó thay vì giả vờ nhận rồi lặng lẽ không dùng.
-    return syncGoogleAccount(adAccountId, { lookbackDays: opts.lookbackDays });
+    // syncAccount (Facebook) tự ghi sync_log; google-sync thì không — ghi ở đây
+    // để lịch sử đồng bộ và lỗi đồng bộ Google hiện ở trang Kết nối.
+    const r = await syncGoogleAccount(adAccountId, { lookbackDays: opts.lookbackDays });
+    await logSync(adAccountId, r);
+    return r;
   }
   if (platform === 'tiktok') {
     return {

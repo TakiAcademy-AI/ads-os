@@ -259,7 +259,13 @@ export function ConfigBrowser({
                     <td className="mono" style={{ color: 'var(--dim)' }}>{c.intervalMinutes} phút</td>
                     <td style={{ fontSize: 12.5, color: stale ? 'var(--red)' : 'var(--ink-2)' }}>
                       {ago(c.lastRunAt)}
-                      {stale && (
+                      {c.status === 'active' && !c.accountUsable ? (
+                        // Bộ chạy theo lịch bỏ qua tài khoản đã ngắt — đã xảy ra thật:
+                        // ba cấu hình "đang bật" im lặng không chạy suốt hai ngày.
+                        <div className="note" style={{ color: 'var(--red)', marginTop: 2 }}>
+                          Không chạy: tài khoản {c.accountName} đã ngắt kết nối. Kết nối lại ở mục Kết nối.
+                        </div>
+                      ) : stale && (
                         <div className="note" style={{ color: 'var(--red)', marginTop: 2 }}>
                           Đang bật nhưng chưa chạy — kiểm tra bộ hẹn giờ
                         </div>

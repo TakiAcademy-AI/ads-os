@@ -104,7 +104,12 @@ export async function GET(req: Request) {
          ON CONFLICT (owner_id, platform, external_id) DO UPDATE SET
            name = EXCLUDED.name, currency = EXCLUDED.currency,
            timezone = EXCLUDED.timezone,
-           login_customer_id = EXCLUDED.login_customer_id,
+           -- Tài khoản đang dùng service account giữ nguyên MCC đi vào: service
+           -- account có thể vào qua MCC khác với người vừa đăng nhập, đổi header
+           -- login-customer-id là mọi lời gọi của nó bị từ chối quyền.
+           login_customer_id = CASE WHEN ad_account.token_source = 'service_account'
+                                    THEN ad_account.login_customer_id
+                                    ELSE EXCLUDED.login_customer_id END,
            last_error = NULL, updated_at = NOW()
          RETURNING id, token_source`,
         [user.id, a.id, a.name, a.currency, a.timeZone, a.loginCustomerId],

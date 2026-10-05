@@ -71,10 +71,10 @@ export async function POST(req: Request) {
   const spec: GoogleCreateSpec = {
     kind: b.kind,
     name: b.name,
-    dailyBudgetMicros: Math.round(b.dailyBudget) * 1_000_000,
+    dailyBudgetMicros: Math.round(b.dailyBudget * 1_000_000),
     bidding: b.bidding,
     targetCpaMicros: b.bidding === 'MAXIMIZE_CONVERSIONS' && b.targetCpa
-      ? Math.round(b.targetCpa) * 1_000_000 : null,
+      ? Math.round(b.targetCpa * 1_000_000) : null,
     geoTargets: b.geoTargets,
     languages: b.languages,
     finalUrl: b.finalUrl,
@@ -110,28 +110,12 @@ export async function POST(req: Request) {
     }
   }
 
-  const budgetText = `${Math.round(b.dailyBudget).toLocaleString('vi-VN')}${acct[0].currency === 'VND' ? 'đ' : ` ${acct[0].currency}`}/ngày`;
+  const budgetText = `${b.dailyBudget.toLocaleString('vi-VN', { maximumFractionDigits: 2 })}${acct[0].currency === 'VND' ? 'đ' : ` ${acct[0].currency}`}/ngày`;
   const reason = `Đăng nhanh Google — ${KIND_VI[b.kind]}, ${b.bidding === 'MAXIMIZE_CLICKS' ? 'tối đa lượt nhấp' : 'tối đa chuyển đổi'}`;
 
+  let made;
   try {
-    const made = await createGoogleCampaign(session.auth, session.customerId, spec);
-
-    await db.query(
-      `INSERT INTO ad_mutation
-         (ad_account_id, target_external_id, target_name, operation, mode, status,
-          before_value, after_value, reason, idempotency_key, source, applied_at)
-       VALUES ($1,$2,$3,'campaign_create','live','applied',
-               'chưa có chiến dịch', $4, $5, $6, 'manual', NOW())
-       ON CONFLICT (ad_account_id, idempotency_key) DO NOTHING`,
-      [
-        b.adAccountId, made?.campaignId ?? '', b.name,
-        `PAUSED · ${budgetText} · chiến dịch ${made?.campaignId ?? '?'}`,
-        reason,
-        `manual-google:${made?.campaignId ?? Date.now()}`,
-      ],
-    );
-
-    return NextResponse.json({ ok: true, ...made });
+    made = await createGoogleCampaign(session.auth, session.customerId, spec);
   } catch (e) {
     // Lệnh mutate là nguyên tử: hỏng thì Google không tạo gì, không có rác để
     // dọn như phía Facebook. Vẫn GHI lần thất bại để tra lại về sau.
@@ -148,4 +132,27 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ error: msg }, { status: 502 });
   }
+
+  // Chiến dịch ĐÃ được tạo. Ghi nhật ký lỗi thì chỉ ghi lại lỗi — trả "thất bại"
+  // lúc này là khiến người dùng bấm lại và tạo trùng chiến dịch.
+  try {
+    await db.query(
+      `INSERT INTO ad_mutation
+         (ad_account_id, target_external_id, target_name, operation, mode, status,
+          before_value, after_value, reason, idempotency_key, source, applied_at)
+       VALUES ($1,$2,$3,'campaign_create','live','applied',
+               'chưa có chiến dịch', $4, $5, $6, 'manual', NOW())
+       ON CONFLICT (ad_account_id, idempotency_key) DO NOTHING`,
+      [
+        b.adAccountId, made?.campaignId ?? '', b.name,
+        `PAUSED · ${budgetText} · chiến dịch ${made?.campaignId ?? '?'}`,
+        reason,
+        `manual-google:${made?.campaignId ?? Date.now()}`,
+      ],
+    );
+  } catch (e) {
+    console.error('[google-quick] đã tạo nhưng không ghi được nhật ký:', e);
+  }
+
+  return NextResponse.json({ ok: true, ...made });
 }

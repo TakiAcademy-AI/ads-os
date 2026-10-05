@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/session';
 import { db } from '@/lib/db';
 import { googleSession, GoogleSetupError } from '@/lib/ads/google-session';
+import { extractError } from '@/lib/ads/google';
 
 export const runtime = 'nodejs';
 
@@ -21,6 +22,9 @@ export async function GET(req: Request) {
   const q = (url.searchParams.get('q') ?? '').trim();
   const accountId = url.searchParams.get('account') ?? '';
   if (q.length < 2) return NextResponse.json({ items: [] });
+  if (!/^[0-9a-f-]{36}$/i.test(accountId)) {
+    return NextResponse.json({ error: 'Tài khoản Google không hợp lệ' }, { status: 400 });
+  }
 
   const { rows } = await db.query(
     `SELECT id FROM ad_account WHERE id = $1 AND owner_id = $2 AND platform = 'google'`,
@@ -41,6 +45,8 @@ export async function GET(req: Request) {
         id?: string; name?: string; targetType?: string; canonicalName?: string; status?: string;
       } }[];
     };
+    // Token hết hạn, 403, 429… không được hiện thành "không có vị trí nào".
+    if (!res.ok) return NextResponse.json({ error: extractError(j, res.status) }, { status: 502 });
     const items = (j.geoTargetConstantSuggestions ?? [])
       .map((x) => x.geoTargetConstant)
       .filter((g) => g?.id && g.status === 'ENABLED')

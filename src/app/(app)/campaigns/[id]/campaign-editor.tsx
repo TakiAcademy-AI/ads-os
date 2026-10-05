@@ -55,9 +55,16 @@ function Toggle({ on, disabled, onChange, label }: {
 }
 
 /** Ô sửa nhanh: hiện giá trị, bấm Sửa thì thành ô nhập + Lưu/Huỷ. */
-function InlineEdit({ value, display, onSave, disabled, numeric, width = 220 }: {
+/** VND không có phần lẻ; USD… có 2 chữ số. Lọc sai là "12.50" thành "1250". */
+function cleanAmount(raw: string, decimals: boolean): string {
+  if (!decimals) return raw.replace(/\D/g, '');
+  const [int, ...rest] = raw.replace(/,/g, '.').replace(/[^\d.]/g, '').split('.');
+  return rest.length ? `${int}.${rest.join('').slice(0, 2)}` : int!;
+}
+
+function InlineEdit({ value, display, onSave, disabled, numeric, decimals = false, width = 220 }: {
   value: string; display?: React.ReactNode; onSave: (v: string) => Promise<boolean>;
-  disabled?: boolean; numeric?: boolean; width?: number;
+  disabled?: boolean; numeric?: boolean; decimals?: boolean; width?: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [v, setV] = useState(value);
@@ -76,10 +83,14 @@ function InlineEdit({ value, display, onSave, disabled, numeric, width = 220 }: 
   }
   return (
     <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-      <input style={{ ...inputStyle, width }} value={v} autoFocus inputMode={numeric ? 'numeric' : undefined}
-             onChange={(e) => setV(numeric ? e.target.value.replace(/\D/g, '') : e.target.value)} />
+      <input style={{ ...inputStyle, width }} value={v} autoFocus
+             inputMode={numeric ? (decimals ? 'decimal' : 'numeric') : undefined}
+             onChange={(e) => setV(numeric ? cleanAmount(e.target.value, decimals) : e.target.value)} />
       <button type="button" className="btn" style={{ padding: '6px 11px', fontSize: 12 }} disabled={busy || !v.trim()}
-              onClick={async () => { setBusy(true); const ok = await onSave(v.trim()); setBusy(false); if (ok) setEditing(false); }}>
+              onClick={async () => {
+                setBusy(true);
+                try { if (await onSave(v.trim())) setEditing(false); } finally { setBusy(false); }
+              }}>
         {busy ? '…' : 'Lưu'}
       </button>
       <button type="button" className="btn btn-ghost" style={{ padding: '6px 11px', fontSize: 12 }}
@@ -97,16 +108,28 @@ export function CampaignEditor({ campaignId, adAccountId, detail, canWrite }: {
   const [okMsg, setOkMsg] = useState('');
   const c = detail.campaign;
   const cur = detail.currency === 'VND' ? 'đ' : ` ${detail.currency}`;
-  const money = (micros: number | null) => (micros === null ? '—' : `${Math.round(micros / 1_000_000).toLocaleString('vi-VN')}${cur}`);
+  const dec = detail.currency !== 'VND';
+  const fmt = (v: number) => v.toLocaleString('vi-VN', dec ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { maximumFractionDigits: 0 });
+  const money = (micros: number | null) => (micros === null ? '—' : `${fmt(micros / 1_000_000)}${cur}`);
+  /** Giá trị đưa vào ô sửa: không làm tròn, không dấu phân cách nghìn. */
+  const raw = (micros: number) => String(dec ? Math.round(micros / 10_000) / 100 : Math.round(micros / 1_000_000));
 
   /** Gửi một chỉnh sửa. Thành công thì tải lại để đọc trạng thái mới từ nền tảng. */
   async function edit(body: Record<string, unknown>, done: string): Promise<boolean> {
     setBusy(true); setError(''); setOkMsg('');
-    const res = await fetch(`/api/campaigns/${campaignId}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-    });
-    const d = await res.json().catch(() => ({}));
-    setBusy(false);
+    let res: Response, d: { error?: string };
+    try {
+      res = await fetch(`/api/campaigns/${campaignId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      d = await res.json().catch(() => ({}));
+    } catch {
+      // Mất mạng: không để mọi nút bị khoá vĩnh viễn ở trạng thái "đang chạy".
+      setError('Không gửi được yêu cầu — kiểm tra kết nối mạng rồi thử lại. Nếu đã gửi đi, tải lại trang để xem trạng thái thật.');
+      return false;
+    } finally {
+      setBusy(false);
+    }
     if (!res.ok) { setError(d.error ?? 'Thao tác thất bại'); return false; }
     setOkMsg(done);
     router.refresh();
@@ -167,11 +190,11 @@ export function CampaignEditor({ campaignId, adAccountId, detail, canWrite }: {
               <tr><td style={{ color: 'var(--dim)' }}>Ngân sách/ngày</td>
                 <td>
                   {c.budgetLevel === 'campaign' && c.dailyBudgetMicros !== null ? (
-                    <InlineEdit value={String(Math.round(c.dailyBudgetMicros / 1_000_000))} numeric width={140}
+                    <InlineEdit value={raw(c.dailyBudgetMicros)} numeric decimals={dec} width={140}
                                 display={<b>{money(c.dailyBudgetMicros)}</b>} disabled={ro || !detail.can.budget}
                                 onSave={(v) => {
                                   const n = Number(v);
-                                  if (!confirm(`Đổi ngân sách/ngày từ ${money(c.dailyBudgetMicros)} thành ${n.toLocaleString('vi-VN')}${cur}?`)) return Promise.resolve(false);
+                                  if (!confirm(`Đổi ngân sách/ngày từ ${money(c.dailyBudgetMicros)} thành ${fmt(n)}${cur}?`)) return Promise.resolve(false);
                                   return edit({ action: 'budget', dailyBudget: n }, 'Đã đổi ngân sách.');
                                 }} />
                   ) : c.lifetimeBudgetMicros !== null ? (
@@ -219,12 +242,12 @@ export function CampaignEditor({ campaignId, adAccountId, detail, canWrite }: {
                   </td>
                   <td className="n" style={{ whiteSpace: 'nowrap' }}>
                     {g.dailyBudgetMicros !== null && (
-                      <InlineEdit value={String(Math.round(g.dailyBudgetMicros / 1_000_000))} numeric width={120}
+                      <InlineEdit value={raw(g.dailyBudgetMicros)} numeric decimals={dec} width={120}
                                   display={<span className="mono">{money(g.dailyBudgetMicros)}/ngày</span>}
                                   disabled={ro || !detail.can.groupBudget}
                                   onSave={(v) => {
                                     const n = Number(v);
-                                    if (!confirm(`Đổi ngân sách/ngày của "${g.name}" thành ${n.toLocaleString('vi-VN')}${cur}?`)) return Promise.resolve(false);
+                                    if (!confirm(`Đổi ngân sách/ngày của "${g.name}" thành ${fmt(n)}${cur}?`)) return Promise.resolve(false);
                                     return edit({ action: 'group_budget', groupId: g.id, groupName: g.name, dailyBudget: n }, 'Đã đổi ngân sách nhóm.');
                                   }} />
                     )}
@@ -395,7 +418,8 @@ function Keywords({ detail, ro, edit }: { detail: CampaignDetail; ro: boolean; e
               <tr key={`${k.groupId}-${k.criterionId}`}>
                 <td style={{ width: 50 }}>
                   <Toggle on={k.enabled} disabled={ro} label={`từ khoá "${k.text}"`}
-                          onChange={(v) => edit({ action: 'keyword_status', groupId: k.groupId, criterionId: k.criterionId, text: k.text, enabled: v },
+                          onChange={(v) => (!v || confirm(`Bật từ khoá "${k.text}"?\n\nKhi bật, quảng cáo có thể hiển thị cho từ khoá này và tiêu tiền.`))
+                            && edit({ action: 'keyword_status', groupId: k.groupId, criterionId: k.criterionId, text: k.text, enabled: v },
                             v ? `Đã bật "${k.text}".` : `Đã tạm dừng "${k.text}".`)} />
                 </td>
                 <td>

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireWriter } from '@/lib/session';
+import { requireWriter, ForbiddenError } from '@/lib/session';
 import { campaignRef, editCampaign, type EditAction } from '@/lib/ads/campaign-detail';
 
 export const runtime = 'nodejs';
@@ -27,8 +27,18 @@ const Body = z.discriminatedUnion('action', [
 
 /** Một chỉnh sửa trên chiến dịch (hoặc nhóm/quảng cáo/từ khoá bên trong nó). */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const user = await requireWriter();
+  let user;
+  try {
+    user = await requireWriter();
+  } catch (e) {
+    if (e instanceof ForbiddenError) return NextResponse.json({ error: e.message }, { status: 403 });
+    throw e;
+  }
   const { id: campaignId } = await ctx.params;
+  // Cột id là UUID — chuỗi khác làm Postgres ném lỗi thành 500 trống trơn.
+  if (!/^[0-9a-f-]{36}$/i.test(campaignId)) {
+    return NextResponse.json({ error: 'Không tìm thấy chiến dịch' }, { status: 404 });
+  }
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     const first = parsed.error.issues[0];

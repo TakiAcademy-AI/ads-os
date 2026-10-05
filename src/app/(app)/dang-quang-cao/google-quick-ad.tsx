@@ -117,13 +117,22 @@ function GeoPicker({ accountId, value, onChange }: {
   const [err, setErr] = useState('');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const seq = useRef(0);
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
     if (q.trim().length < 2) { setItems([]); return; }
     timer.current = setTimeout(async () => {
-      const res = await fetch(`/api/google/geo?account=${accountId}&q=${encodeURIComponent(q.trim())}`);
-      const d = await res.json().catch(() => ({}));
-      if (res.ok) { setItems(d.items ?? []); setErr(''); } else setErr(d.error ?? 'Không tìm được');
+      // Gõ nhanh thì request cũ có thể về SAU request mới — chỉ nhận kết quả
+      // của lần gõ gần nhất.
+      const mine = ++seq.current;
+      try {
+        const res = await fetch(`/api/google/geo?account=${accountId}&q=${encodeURIComponent(q.trim())}`);
+        const d = await res.json().catch(() => ({}));
+        if (mine !== seq.current) return;
+        if (res.ok) { setItems(d.items ?? []); setErr(''); } else { setItems([]); setErr(d.error ?? 'Không tìm được'); }
+      } catch {
+        if (mine === seq.current) { setItems([]); setErr('Không gọi được máy chủ'); }
+      }
     }, 350);
   }, [q, accountId]);
 
@@ -171,7 +180,9 @@ function GeoPicker({ accountId, value, onChange }: {
 }
 
 function ImagePicker({ kind, items, setItems, max }: {
-  kind: ImageKind; items: string[]; setItems: (v: string[]) => void; max: number;
+  kind: ImageKind; items: string[];
+  /** Nhận HÀM cập nhật: cắt ảnh mất vài giây, danh sách lúc bắt đầu có thể đã cũ. */
+  setItems: (fn: (prev: string[]) => string[]) => void; max: number;
 }) {
   const spec = IMAGE_SPEC[kind];
   const [busy, setBusy] = useState(false);
@@ -183,7 +194,7 @@ function ImagePicker({ kind, items, setItems, max }: {
       try { out.push(await cropToSpec(f, kind)); } catch { /* bỏ file không đọc được */ }
     }
     setBusy(false);
-    setItems([...items, ...out]);
+    setItems((prev) => [...prev, ...out].slice(0, max));
   }
   return (
     <div>
@@ -192,7 +203,7 @@ function ImagePicker({ kind, items, setItems, max }: {
           <div key={i} style={{ position: 'relative' }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={src} alt="" style={{ height: 64, borderRadius: 6, border: '1px solid var(--line)' }} />
-            <button type="button" onClick={() => setItems(items.filter((_, j) => j !== i))}
+            <button type="button" onClick={() => setItems((prev) => prev.filter((_, j) => j !== i))}
                     style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10,
                              border: '1px solid var(--line-strong)', background: 'var(--card)', cursor: 'pointer',
                              fontSize: 12, lineHeight: '16px' }}>×</button>
@@ -274,6 +285,13 @@ export function GoogleQuickAd({ accounts, defaultAccountId }: {
   const problems = [...checkSpec(spec), ...(name.trim() ? [] : ['Thiếu tên chiến dịch']),
     ...(Number(budget) > 0 ? [] : ['Ngân sách phải lớn hơn 0'])];
   const account = accounts.find((a) => a.id === accountId);
+  // VND không có phần lẻ; USD… cho 2 chữ số. Lọc mọi ký tự không phải số sẽ
+  // biến "7.50" thành "750".
+  const amount = (raw: string) => {
+    if ((account?.currency ?? 'VND') === 'VND') return raw.replace(/\D/g, '');
+    const [int, ...rest] = raw.replace(/,/g, '.').replace(/[^\d.]/g, '').split('.');
+    return rest.length ? `${int}.${rest.join('').slice(0, 2)}` : int!;
+  };
 
   async function send(validateOnly: boolean) {
     setBusy(validateOnly ? 'validate' : 'create'); setError(''); setOkMsg('');
@@ -298,7 +316,14 @@ export function GoogleQuickAd({ accounts, defaultAccountId }: {
         } : undefined,
         validateOnly,
       }),
-    });
+    }).catch(() => null);
+    if (!res) {
+      setBusy(null);
+      setError(validateOnly
+        ? 'Không gửi được yêu cầu — kiểm tra kết nối mạng rồi thử lại.'
+        : 'Không gửi được yêu cầu. Nếu yêu cầu đã tới máy chủ, chiến dịch có thể đã được tạo — xem Nhật ký thay đổi trước khi bấm lại.');
+      return;
+    }
     const d = await res.json().catch(() => ({}));
     setBusy(null);
     if (!res.ok) { setError(d.error ?? 'Thao tác thất bại'); return; }
@@ -382,7 +407,7 @@ export function GoogleQuickAd({ accounts, defaultAccountId }: {
               <Field label={`Ngân sách/ngày (${account?.currency ?? ''})`}
                      hint={kind === 'DEMAND_GEN' ? 'Demand Gen tối thiểu 125.000đ/ngày' : undefined}>
                 <input style={inputStyle} inputMode="numeric" value={budget}
-                       onChange={(e) => setBudget(e.target.value.replace(/\D/g, ''))} />
+                       onChange={(e) => setBudget(amount(e.target.value))} />
               </Field>
               <Field label="Chiến lược giá thầu">
                 <select style={inputStyle} value={bidding} onChange={(e) => setBidding(e.target.value as GoogleBidding)}>
@@ -392,7 +417,7 @@ export function GoogleQuickAd({ accounts, defaultAccountId }: {
               {bidding === 'MAXIMIZE_CONVERSIONS' && (
                 <Field label="CPA mục tiêu (tuỳ chọn)">
                   <input style={inputStyle} inputMode="numeric" value={targetCpa} placeholder="để trống = Google tự tối ưu"
-                         onChange={(e) => setTargetCpa(e.target.value.replace(/\D/g, ''))} />
+                         onChange={(e) => setTargetCpa(amount(e.target.value))} />
                 </Field>
               )}
             </div>
@@ -462,12 +487,12 @@ export function GoogleQuickAd({ accounts, defaultAccountId }: {
             {L.images && (
               <>
                 <Field label="Ảnh ngang"><ImagePicker kind="landscape" items={images.landscape} max={5}
-                  setItems={(v) => setImages((prev) => ({ ...prev, landscape: v }))} /></Field>
+                  setItems={(fn) => setImages((prev) => ({ ...prev, landscape: fn(prev.landscape) }))} /></Field>
                 <Field label="Ảnh vuông"><ImagePicker kind="square" items={images.square} max={5}
-                  setItems={(v) => setImages((prev) => ({ ...prev, square: v }))} /></Field>
+                  setItems={(fn) => setImages((prev) => ({ ...prev, square: fn(prev.square) }))} /></Field>
                 {kind !== 'DISPLAY' && (
                   <Field label="Logo"><ImagePicker kind="logo" items={images.logo} max={5}
-                    setItems={(v) => setImages((prev) => ({ ...prev, logo: v }))} /></Field>
+                    setItems={(fn) => setImages((prev) => ({ ...prev, logo: fn(prev.logo) }))} /></Field>
                 )}
               </>
             )}

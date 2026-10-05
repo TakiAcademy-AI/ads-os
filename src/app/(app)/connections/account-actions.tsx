@@ -31,6 +31,7 @@ export function AccountActions({ id, pending = false }: { id: string; pending?: 
     <button className="btn btn-ghost" style={{ fontSize: 12.5 }} disabled={!!busy}
             onClick={() => {
               if (confirm('Ngắt kết nối và xoá token? Số liệu đã kéo về vẫn giữ nguyên.'
+                + ' Mọi cấu hình tự động của tài khoản này (đồng bộ, tắt ads theo CPA…) sẽ NGỪNG chạy cho tới khi kết nối lại.'
                 + ' Nếu đây là tài khoản Facebook cuối cùng còn token, các Page đã nạp cũng bị gỡ.')) {
                 call('DELETE');
               }

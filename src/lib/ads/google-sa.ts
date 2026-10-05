@@ -50,7 +50,10 @@ export function parseServiceAccountKey(raw: string): ServiceAccountKey {
   return {
     client_email: j.client_email,
     private_key: j.private_key,
-    token_uri: typeof j.token_uri === 'string' ? j.token_uri : undefined,
+    // KHÔNG lấy token_uri từ file: server sẽ POST tới địa chỉ đó và trả lỗi
+    // của nó về cho người dán — tức là cho người dùng bắt server gọi bất kỳ
+    // địa chỉ nội bộ nào (SSRF). Khoá Google luôn dùng một địa chỉ cố định.
+    token_uri: DEFAULT_TOKEN_URI,
     project_id: typeof j.project_id === 'string' ? j.project_id : undefined,
   };
 }
@@ -61,7 +64,8 @@ function b64url(s: string | Buffer): string {
 
 /** Đổi khoá service account lấy access token sống 1 giờ. */
 export async function saAccessToken(key: ServiceAccountKey): Promise<string> {
-  const tokenUri = key.token_uri || DEFAULT_TOKEN_URI;
+  // Luôn dùng địa chỉ cố định, kể cả khi khoá đã lưu từ trước mang token_uri khác.
+  const tokenUri = DEFAULT_TOKEN_URI;
   const now = Math.floor(Date.now() / 1000);
   const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
   const claims = b64url(JSON.stringify({

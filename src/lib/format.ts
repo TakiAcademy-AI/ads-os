@@ -3,6 +3,16 @@ export function vnd(micros: number): string {
   return `${Math.round(micros / 1_000_000).toLocaleString('vi-VN')}đ`;
 }
 
+/**
+ * Micros → chuỗi theo ĐÚNG tiền tệ của tài khoản. vnd() luôn ghi "đ" và bỏ
+ * phần lẻ — tài khoản USD tiêu $12,34 sẽ hiện thành "12đ".
+ */
+export function money(micros: number, currency: string): string {
+  const v = micros / 1_000_000;
+  if (currency === 'VND') return `${Math.round(v).toLocaleString('vi-VN')}đ`;
+  return `${v.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+}
+
 export function num(n: number): string {
   return Math.round(n).toLocaleString('vi-VN');
 }

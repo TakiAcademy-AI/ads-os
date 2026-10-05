@@ -13,6 +13,11 @@ export interface AutomationConfigRow {
   lastRunAt: string | null;
   lastError: string | null;
   createdAt: string;
+  /**
+   * false = tài khoản đã ngắt / mất token. Bộ chạy theo lịch BỎ QUA cấu hình
+   * của tài khoản đó, nên cấu hình "đang bật" thật ra không chạy — phải nói ra.
+   */
+  accountUsable: boolean;
 }
 
 /** Cấu hình của một tài khoản. Bỏ trống accountId thì lấy của mọi tài khoản. */
@@ -22,7 +27,8 @@ export async function listConfigs(
 ): Promise<AutomationConfigRow[]> {
   const { rows } = await db.query(
     `SELECT c.id, c.ad_account_id, a.name AS account_name, c.kind, c.name, c.status,
-            c.interval_minutes, c.params, c.last_run_at, c.last_error, c.created_at
+            c.interval_minutes, c.params, c.last_run_at, c.last_error, c.created_at,
+            (a.status = 'active' AND a.encrypted_token IS NOT NULL) AS account_usable
      FROM automation_config c
      JOIN ad_account a ON a.id = c.ad_account_id
      WHERE c.owner_id = $1 AND ($2::uuid IS NULL OR c.ad_account_id = $2)
@@ -41,6 +47,7 @@ export async function listConfigs(
     lastRunAt: r.last_run_at ? new Date(r.last_run_at).toISOString() : null,
     lastError: r.last_error,
     createdAt: new Date(r.created_at).toISOString(),
+    accountUsable: r.account_usable === true,
   }));
 }
 

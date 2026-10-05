@@ -4,7 +4,7 @@ import { requireUser } from '@/lib/session';
 import { db } from '@/lib/db';
 import { campaignRef, loadCampaignDetail } from '@/lib/ads/campaign-detail';
 import type { CampaignDetail } from '@/lib/ads/campaign-detail-types';
-import { vnd, num, dateTime } from '@/lib/format';
+import { money, num, dateTime } from '@/lib/format';
 import { CampaignEditor } from './campaign-editor';
 
 export const dynamic = 'force-dynamic';
@@ -90,7 +90,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         <div className="card-head">
           <b>Số liệu 30 ngày</b>
           <span>
-            {vnd(total.spend)} · {num(total.impressions)} hiển thị · {num(total.clicks)} nhấp
+            {money(total.spend, ref.currency)} · {num(total.impressions)} hiển thị · {num(total.clicks)} nhấp
             · {num(total.conversions)} kết quả
           </span>
         </div>
@@ -109,12 +109,12 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
                 return (
                   <tr key={r.d}>
                     <td className="mono">{r.d}</td>
-                    <td className="n mono">{vnd(sp)}</td>
+                    <td className="n mono">{money(sp, ref.currency)}</td>
                     <td className="n mono">{num(im)}</td>
                     <td className="n mono">{num(cl)}</td>
                     <td className="n mono">{im > 0 ? `${((cl / im) * 100).toFixed(2)}%` : '—'}</td>
                     <td className="n mono">{num(cv)}</td>
-                    <td className="n mono">{cv > 0 ? vnd(sp / cv) : '—'}</td>
+                    <td className="n mono">{cv > 0 ? money(sp / cv, ref.currency) : '—'}</td>
                   </tr>
                 );
               })}

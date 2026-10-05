@@ -203,7 +203,7 @@ export async function syncAccount(
   }
 }
 
-async function logSync(adAccountId: string, r: SyncResult): Promise<void> {
+export async function logSync(adAccountId: string, r: SyncResult): Promise<void> {
   try {
     await db.query(
       `INSERT INTO sync_log (ad_account_id, job, ok, rows_written, duration_ms, message)
