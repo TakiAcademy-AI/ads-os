@@ -274,6 +274,46 @@ export async function listAdAccounts(auth: GoogleAuth): Promise<GoogleAdAccount[
   return [...seen.values()];
 }
 
+/**
+ * Giải thích vì sao một MCC không có tài khoản con dùng được.
+ *
+ * listAdAccounts chỉ lấy tài khoản ENABLED. Khi kết quả chỉ còn MCC, người
+ * dùng cần biết là MCC TRỐNG hay có con nhưng bị huỷ/tạm ngưng — hai việc phải
+ * sửa ở hai chỗ khác nhau. Lời mời liên kết đang chờ chấp nhận thì chưa hiện
+ * trong customer_client, nên không đếm được ở đây.
+ */
+export async function describeManagerChildren(
+  auth: GoogleAuth, managerId: string,
+): Promise<string> {
+  const rows = await gaql<CustomerClientRow>(
+    { ...auth, loginCustomerId: managerId },
+    managerId,
+    `SELECT customer_client.id, customer_client.descriptive_name,
+            customer_client.manager, customer_client.status
+     FROM customer_client
+     WHERE customer_client.level > 0`,
+  ).catch(() => null);
+  if (!rows) return '';
+
+  const children = rows.map((r) => r.customerClient).filter((c) => c?.id && !c.manager);
+  if (children.length === 0) {
+    return `MCC ${managerId} chưa liên kết tài khoản quảng cáo nào (hoặc lời mời liên kết `
+      + `chưa được chấp nhận).`;
+  }
+  const byStatus = new Map<string, number>();
+  for (const c of children) byStatus.set(c!.status ?? 'UNKNOWN', (byStatus.get(c!.status ?? 'UNKNOWN') ?? 0) + 1);
+  const list = [...byStatus].map(([st, n]) => `${n} ${STATUS_VI[st] ?? st}`).join(', ');
+  return `MCC ${managerId} có ${children.length} tài khoản con nhưng không cái nào đang `
+    + `hoạt động: ${list}.`;
+}
+
+const STATUS_VI: Record<string, string> = {
+  ENABLED: 'đang hoạt động',
+  CANCELED: 'đã huỷ',
+  SUSPENDED: 'bị tạm ngưng',
+  CLOSED: 'đã đóng',
+};
+
 // ─── Chiến dịch ──────────────────────────────────────────────────────────────
 
 export interface GoogleCampaign {

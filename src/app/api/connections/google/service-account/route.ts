@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireWriter } from '@/lib/session';
 import { db } from '@/lib/db';
 import { saveToken } from '@/lib/ads/token';
-import { listAdAccounts } from '@/lib/ads/google';
+import { listAdAccounts, describeManagerChildren } from '@/lib/ads/google';
 import { developerToken } from '@/lib/ads/google-oauth';
 import { parseServiceAccountKey, saAccessToken } from '@/lib/ads/google-sa';
 
@@ -44,9 +44,15 @@ export async function POST(req: Request) {
     // MCC không chạy quảng cáo trực tiếp — xem ghi chú ở callback OAuth.
     const usable = accounts.filter((a) => !a.isManager);
     if (usable.length === 0) {
+      const auth = { accessToken, developerToken: developerToken() || undefined };
+      const why = (await Promise.all(accounts.map((m) => describeManagerChildren(auth, m.id))))
+        .filter(Boolean).join(' ');
       return NextResponse.json({
-        error: `Chỉ thấy ${accounts.length} tài khoản quản lý (MCC). Liên kết tài khoản quảng cáo `
-          + `vào MCC đó, hoặc thêm service account trực tiếp vào tài khoản quảng cáo.`,
+        error: `Chỉ thấy ${accounts.length} tài khoản quản lý (MCC), không có tài khoản quảng cáo `
+          + `nào đang hoạt động. ${why} Cách sửa: trong MCC vào Tài khoản → dấu + → Liên kết `
+          + `tài khoản hiện có và chấp nhận lời mời ở tài khoản quảng cáo; hoặc thêm `
+          + `${key.client_email} trực tiếp vào tài khoản quảng cáo (Quản trị → Quyền truy cập `
+          + `và bảo mật).`,
       }, { status: 400 });
     }
 
