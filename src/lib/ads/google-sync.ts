@@ -13,6 +13,7 @@ import {
   listCampaigns, fetchInsights, mapChannelType, GoogleAdsError,
 } from './google';
 import type { SyncResult } from './sync';
+import { zonedToUtcIso, zeroMissingDays, campaignIdMap } from './sync-common';
 
 /** Hôm nay theo giờ VN. Không dùng UTC — máy chủ chạy UTC sẽ lệch ngày. */
 function dateVn(offsetDays = 0): string {
@@ -45,6 +46,8 @@ export async function syncGoogleAccount(
   }
 
   const { auth, customerId } = session;
+  const { rows: tzRow } = await db.query(`SELECT timezone FROM ad_account WHERE id = $1`, [adAccountId]);
+  const tz = (tzRow[0]?.timezone as string) || 'Asia/Ho_Chi_Minh';
 
   try {
     // ── 1. Chiến dịch ──
@@ -70,7 +73,8 @@ export async function syncGoogleAccount(
           c.status,
           // amount_micros của Google ĐÃ là micros — không quy đổi gì thêm.
           c.dailyBudgetMicros,
-          c.startDate ? `${c.startDate}T00:00:00Z` : null,
+          // Giờ của TÀI KHOẢN → UTC. Trước đây ghép thành "...T00:00:00Z" — lệch 7 giờ.
+          c.startDateTime ? zonedToUtcIso(c.startDateTime, tz) : null,
         ],
       );
       if (rows[0]) idByExternal.set(c.id, rows[0].id as string);
@@ -78,17 +82,20 @@ export async function syncGoogleAccount(
     base.campaigns = campaigns.length;
 
     // ── 2. Số liệu theo ngày ──
-    const insights = await fetchInsights(auth, customerId, {
-      since: dateVn(lookback),
-      until: dateVn(0),
-    });
+    const since = dateVn(lookback), until = dateVn(0);
+    const insights = await fetchInsights(auth, customerId, { since, until });
 
+    // Chiến dịch đã xoá không có ở bước 1 nhưng vẫn có số (chuyển đổi về muộn)
+    // — tra thêm trong những chiến dịch đã lưu từ trước.
+    const known = await campaignIdMap(adAccountId);
+    const seen = new Set<string>();
     let metricRows = 0;
     let revisionRows = 0;
 
     for (const row of insights) {
-      const campaignId = idByExternal.get(row.campaignId);
-      if (!campaignId) continue;   // Chiến dịch có số nhưng không đọc được ở bước 1.
+      const campaignId = idByExternal.get(row.campaignId) ?? known.get(row.campaignId);
+      if (!campaignId) continue;   // Chiến dịch chưa từng lưu — lượt sau sẽ có.
+      seen.add(`${campaignId}|${row.date}`);
 
       // Google trả MỘT chỉ số chuyển đổi duy nhất, dạng thập phân. Không có mớ
       // action_type trùng lặp như Facebook nên không có bẫy cộng dồn đếm ba lần.
@@ -135,6 +142,11 @@ export async function syncGoogleAccount(
       );
       revisionRows += rowCount ?? 0;
     }
+
+    // Google bỏ hẳn dòng toàn số 0 — ngày bị điều chỉnh về 0 phải tự đưa về 0.
+    const z = await zeroMissingDays(adAccountId, since, until, seen);
+    metricRows += z.zeroed;
+    revisionRows += z.revisions;
 
     await db.query(
       `UPDATE ad_account SET last_synced_at = NOW(), last_error = NULL, updated_at = NOW()

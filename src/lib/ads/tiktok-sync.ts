@@ -8,6 +8,7 @@ import { db } from '../db';
 import { readToken } from './token';
 import { listCampaigns, fetchInsights, mapObjective, TikTokError } from './tiktok';
 import type { SyncResult } from './sync';
+import { zeroMissingDays, campaignIdMap } from './sync-common';
 
 /**
  * Ngày theo MÚI GIỜ TÀI KHOẢN — báo cáo TikTok tính ngày theo múi giờ đó. Dùng
@@ -73,11 +74,16 @@ export async function syncTikTokAccount(
     base.campaigns = campaigns.length;
 
     // ── 2. Số liệu theo ngày ──
-    const insights = await fetchInsights(token, advertiserId, { since: dateIn(tz, lookback), until: dateIn(tz, 0) });
+    const since = dateIn(tz, lookback), until = dateIn(tz, 0);
+    const insights = await fetchInsights(token, advertiserId, { since, until });
+    // Chiến dịch đã xoá vẫn có thể có số — tra cả những chiến dịch đã lưu trước đó.
+    const known = await campaignIdMap(adAccountId);
+    const seen = new Set<string>();
     let metricRows = 0, revisionRows = 0;
     for (const row of insights) {
-      const campaignId = idByExternal.get(row.campaignId);
+      const campaignId = idByExternal.get(row.campaignId) ?? known.get(row.campaignId);
       if (!campaignId || !/^\d{4}-\d{2}-\d{2}$/.test(row.date)) continue;
+      seen.add(`${campaignId}|${row.date}`);
       await db.query(
         `INSERT INTO ad_metric_daily
            (ad_account_id, campaign_id, ad_external_id, date,
@@ -115,6 +121,11 @@ export async function syncTikTokAccount(
       );
       revisionRows += rowCount ?? 0;
     }
+
+    // Cùng bẫy với Google: ngày bị điều chỉnh về 0 có thể không còn dòng nào.
+    const z = await zeroMissingDays(adAccountId, since, until, seen);
+    metricRows += z.zeroed;
+    revisionRows += z.revisions;
 
     await db.query(
       `UPDATE ad_account SET last_synced_at = NOW(), last_error = NULL, updated_at = NOW() WHERE id = $1`,

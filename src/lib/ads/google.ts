@@ -370,6 +370,8 @@ export interface GoogleCampaign {
   /** Resource name của ngân sách — cần để ĐỔI ngân sách sau này. */
   budgetResource: string | null;
   startDate: string | null;
+  /** "YYYY-MM-DD HH:MM:SS" theo GIỜ CỦA TÀI KHOẢN, như Google trả. */
+  startDateTime: string | null;
 }
 
 interface CampaignRow {
@@ -402,6 +404,7 @@ export async function listCampaigns(
     // Từ v23 Google bỏ start_date, thay bằng start_date_time dạng
     // "2026-10-05 14:12:40" (giờ của tài khoản). Chỉ cần phần ngày.
     startDate: r.campaign!.startDateTime?.slice(0, 10) ?? null,
+    startDateTime: r.campaign!.startDateTime ?? null,
   }));
 }
 
@@ -440,8 +443,9 @@ export async function fetchInsights(
             metrics.cost_micros, metrics.impressions, metrics.clicks,
             metrics.conversions, metrics.ctr
      FROM campaign
-     WHERE segments.date BETWEEN '${opts.since}' AND '${opts.until}'
-       AND campaign.status != 'REMOVED'`);
+     WHERE segments.date BETWEEN '${opts.since}' AND '${opts.until}'`);
+  // KHÔNG lọc bỏ chiến dịch đã xoá: chuyển đổi của chúng vẫn được ghi nhận muộn
+  // nhiều ngày sau, và chi tiêu trong quá khứ của chúng vẫn là tiền đã tiêu.
 
   return rows.filter((r) => r.campaign?.id && r.segments?.date).map((r) => ({
     campaignId: r.campaign!.id!,
