@@ -65,7 +65,7 @@ export async function tiktokCampaignDetail(
     advertiser_id: advertiserId,
     filtering: { campaign_ids: [campaignId] },
     fields: ['campaign_id', 'campaign_name', 'objective_type', 'operation_status', 'secondary_status',
-      'budget', 'budget_mode', 'create_time'],
+      'budget', 'budget_mode', 'create_time', 'campaign_automation_type'],
   });
   const raw = c.list?.[0];
   if (!raw) throw new Error('Không tìm thấy chiến dịch trên TikTok — có thể đã bị xoá');
@@ -82,17 +82,30 @@ export async function tiktokCampaignDetail(
       advertiser_id: advertiserId, page_size: 1000,
       filtering: { campaign_ids: [campaignId] },
       fields: ['ad_id', 'adgroup_id', 'ad_name', 'operation_status', 'secondary_status', 'ad_text', 'ad_texts',
-        'display_name', 'landing_page_url', 'call_to_action', 'video_id', 'tiktok_item_id'],
+        'display_name', 'landing_page_url', 'call_to_action', 'video_id', 'tiktok_item_id', 'smart_plus_ad_id'],
     }).then((d) => d.list ?? []), [] as Raw[]),
   ]);
+
+  // Upgraded Smart+: ad/get trả từng MẪU (creative), không phải từng quảng cáo.
+  // Gom theo smart_plus_ad_id — đó mới là ID dùng cho lệnh bật/tạm dừng.
+  if (camp.smartPlus) {
+    const seen = new Set<string>();
+    for (let i = ads.length - 1; i >= 0; i--) {
+      const key = String(ads[i]!.smart_plus_ad_id ?? ads[i]!.ad_id);
+      ads[i]!.ad_id = key;
+      if (seen.has(key)) ads.splice(i, 1); else seen.add(key);
+    }
+  }
 
   // Lý do từ chối: endpoint riêng, tối đa 100 ID mỗi lần.
   const review = new Map<string, Raw>();
   const adIds = ads.map((a) => String(a.ad_id));
   for (let i = 0; i < adIds.length; i += 100) {
-    const d = await safe('Kết quả duyệt', ttCall<{ ad_review_map?: Record<string, Raw>; list?: Raw[] }>('GET', 'ad/review_info', token, {
-      advertiser_id: advertiserId, ad_ids: adIds.slice(i, i + 100),
-    }), {} as { ad_review_map?: Record<string, Raw>; list?: Raw[] });
+    const d = await safe('Kết quả duyệt', ttCall<{ ad_review_map?: Record<string, Raw>; list?: Raw[] }>('GET',
+      camp.smartPlus ? 'smart_plus/ad/review_info' : 'ad/review_info', token, {
+        advertiser_id: advertiserId,
+        ...(camp.smartPlus ? { smart_plus_ad_ids: adIds.slice(i, i + 100) } : { ad_ids: adIds.slice(i, i + 100) }),
+      }), {} as { ad_review_map?: Record<string, Raw>; list?: Raw[] });
     // Tài liệu không thống nhất dạng trả về — nhận cả map lẫn list.
     for (const [k, v] of Object.entries(d.ad_review_map ?? {})) review.set(k, v);
     for (const v of d.list ?? []) if (v.ad_id) review.set(String(v.ad_id), v);
@@ -150,7 +163,7 @@ export async function tiktokCampaignDetail(
       serving: camp.operationStatus === 'DISABLE' ? 'Đã tạm dừng' : s.text,
       servingLevel: camp.operationStatus === 'DISABLE' ? 'off' : s.level,
       issues: s.level === 'ok' || camp.operationStatus === 'DISABLE' ? [] : [{ code: raw.secondary_status ?? '', text: s.text, level: 'info' }],
-      type: OBJECTIVE[camp.objective] ?? camp.objective,
+      type: `${OBJECTIVE[camp.objective] ?? camp.objective}${camp.smartPlus ? ' · Upgraded Smart+' : ''}`,
       bidding: null,
       dailyBudgetMicros: daily ? camp.budgetMicros : null,
       lifetimeBudgetMicros: camp.budgetMode === 'BUDGET_MODE_TOTAL' ? camp.budgetMicros : null,
@@ -160,6 +173,7 @@ export async function tiktokCampaignDetail(
       start: camp.createTime ? `${camp.createTime.replace(' ', 'T')}Z` : null,
       end: null,
       nativeUrl: `https://ads.tiktok.com/i18n/perf/campaign?aadvid=${advertiserId}`,
+      smartPlus: camp.smartPlus,
     },
     locations: [],
     languages: [],

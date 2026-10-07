@@ -11,8 +11,18 @@ import { ttCall, microsToTtMoney, toCampaign, type TtCampaign, type TtAuth } fro
 
 export type TtStatus = 'ENABLE' | 'DISABLE';
 
-export async function setCampaignStatus(token: TtAuth, advertiserId: string, campaignId: string, status: TtStatus): Promise<void> {
-  await ttCall('POST', 'campaign/status/update', token, {
+/** Tiền tố đường dẫn theo loại chiến dịch: Upgraded Smart+ có bộ lệnh riêng. */
+const sp = (smartPlus: boolean | undefined, path: string) => (smartPlus ? `smart_plus/${path}` : path);
+
+/**
+ * Bật/tạm dừng chiến dịch. Không truyền smartPlus thì tự đọc loại chiến dịch —
+ * lớp tự động hoá (tắt ads theo CPA) không biết chiến dịch thuộc loại nào.
+ */
+export async function setCampaignStatus(
+  token: TtAuth, advertiserId: string, campaignId: string, status: TtStatus, smartPlus?: boolean,
+): Promise<void> {
+  const isSp = smartPlus ?? (await getCampaign(token, advertiserId, campaignId))?.smartPlus ?? false;
+  await ttCall('POST', sp(isSp, 'campaign/status/update'), token, {
     advertiser_id: advertiserId, campaign_ids: [campaignId], operation_status: status,
   });
 }
@@ -22,7 +32,7 @@ export async function getCampaign(token: TtAuth, advertiserId: string, campaignI
     advertiser_id: advertiserId,
     filtering: { campaign_ids: [campaignId] },
     fields: ['campaign_id', 'campaign_name', 'objective_type', 'operation_status', 'secondary_status',
-      'budget', 'budget_mode', 'create_time'],
+      'budget', 'budget_mode', 'create_time', 'campaign_automation_type'],
   });
   return d.list?.[0] ? toCampaign(d.list[0]) : null;
 }
@@ -42,15 +52,19 @@ export async function setCampaignDailyBudget(
   }
   const budget = microsToTtMoney(budgetMicros, currency);
   if (budget <= 0) throw new Error('Ngân sách phải lớn hơn 0');
-  await ttCall('POST', 'campaign/update', token, { advertiser_id: advertiserId, campaign_id: campaignId, budget });
+  await ttCall('POST', sp(c.smartPlus, 'campaign/update'), token, { advertiser_id: advertiserId, campaign_id: campaignId, budget });
 }
 
-export async function renameCampaign(token: TtAuth, advertiserId: string, campaignId: string, name: string): Promise<void> {
-  await ttCall('POST', 'campaign/update', token, { advertiser_id: advertiserId, campaign_id: campaignId, campaign_name: name });
+export async function renameCampaign(
+  token: TtAuth, advertiserId: string, campaignId: string, name: string, smartPlus = false,
+): Promise<void> {
+  await ttCall('POST', sp(smartPlus, 'campaign/update'), token, { advertiser_id: advertiserId, campaign_id: campaignId, campaign_name: name });
 }
 
-export async function setAdGroupStatus(token: TtAuth, advertiserId: string, adgroupId: string, status: TtStatus): Promise<void> {
-  await ttCall('POST', 'adgroup/status/update', token, {
+export async function setAdGroupStatus(
+  token: TtAuth, advertiserId: string, adgroupId: string, status: TtStatus, smartPlus = false,
+): Promise<void> {
+  await ttCall('POST', sp(smartPlus, 'adgroup/status/update'), token, {
     advertiser_id: advertiserId, adgroup_ids: [adgroupId], operation_status: status,
   });
 }
@@ -61,17 +75,21 @@ export async function setAdGroupStatus(token: TtAuth, advertiserId: string, adgr
  * không phải ngay lập tức. Nơi gọi phải báo điều này cho người dùng.
  */
 export async function setAdGroupDailyBudget(
-  token: TtAuth, advertiserId: string, adgroupId: string, budgetMicros: number, currency: string,
+  token: TtAuth, advertiserId: string, adgroupId: string, budgetMicros: number, currency: string, smartPlus = false,
 ): Promise<void> {
   const budget = microsToTtMoney(budgetMicros, currency);
   if (budget <= 0) throw new Error('Ngân sách phải lớn hơn 0');
-  await ttCall('POST', 'adgroup/budget/update', token, {
-    advertiser_id: advertiserId, scheduled_budget: [{ adgroup_id: adgroupId, scheduled_budget: budget }],
-  });
+  // Smart+: đổi ngay bằng `budget` (scheduled_budget của Smart+ cần allowlist).
+  await ttCall('POST', sp(smartPlus, 'adgroup/budget/update'), token, smartPlus
+    ? { advertiser_id: advertiserId, budget: [{ adgroup_id: adgroupId, budget }] }
+    : { advertiser_id: advertiserId, scheduled_budget: [{ adgroup_id: adgroupId, scheduled_budget: budget }] });
 }
 
-export async function setAdStatus(token: TtAuth, advertiserId: string, adId: string, status: TtStatus): Promise<void> {
-  await ttCall('POST', 'ad/status/update', token, {
-    advertiser_id: advertiserId, ad_ids: [adId], operation_status: status,
-  });
+/** Smart+ định danh quảng cáo bằng smart_plus_ad_id, gửi trong smart_plus_ad_ids. */
+export async function setAdStatus(
+  token: TtAuth, advertiserId: string, adId: string, status: TtStatus, smartPlus = false,
+): Promise<void> {
+  await ttCall('POST', sp(smartPlus, 'ad/status/update'), token, smartPlus
+    ? { advertiser_id: advertiserId, smart_plus_ad_ids: [adId], operation_status: status }
+    : { advertiser_id: advertiserId, ad_ids: [adId], operation_status: status });
 }

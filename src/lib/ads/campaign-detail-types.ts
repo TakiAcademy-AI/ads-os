@@ -40,6 +40,8 @@ export interface DetailCampaign {
   end: string | null;
   /** Link mở thẳng chiến dịch trên giao diện của nền tảng. */
   nativeUrl: string | null;
+  /** TikTok: chiến dịch Upgraded Smart+ — sửa bằng bộ lệnh /smart_plus/… riêng. */
+  smartPlus?: boolean;
 }
 
 export interface DetailLocation {

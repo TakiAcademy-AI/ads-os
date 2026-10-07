@@ -137,6 +137,7 @@ const TOOL_NAME: Record<string, string> = {
   'ad/review_info': 'ad_review_info_get',
   'adgroup/review_info': 'adgroup_review_info_get',
   'oauth2/advertiser/get': 'auth_advertiser_get',
+  'smart_plus/ad/review_info': 'smart_plus_ad_review_info_get',
 };
 export function toolNameFor(path: string): string {
   const p = path.replace(/^\/+|\/+$/g, '');

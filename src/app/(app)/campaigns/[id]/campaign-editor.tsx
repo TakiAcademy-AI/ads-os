@@ -247,7 +247,7 @@ export function CampaignEditor({ campaignId, adAccountId, detail, canWrite }: {
                                   disabled={ro || !detail.can.groupBudget}
                                   onSave={(v) => {
                                     const n = Number(v);
-                                    const later = detail.platform === 'tiktok'
+                                    const later = detail.platform === 'tiktok' && !c.smartPlus
                                       ? '\n\nTikTok áp dụng ngân sách ngày mới của nhóm từ 00:00 HÔM SAU (giờ tài khoản), không phải ngay.' : '';
                                     if (!confirm(`Đổi ngân sách/ngày của "${g.name}" thành ${fmt(n)}${cur}?${later}`)) return Promise.resolve(false);
                                     return edit({ action: 'group_budget', groupId: g.id, groupName: g.name, dailyBudget: n }, 'Đã đổi ngân sách nhóm.');

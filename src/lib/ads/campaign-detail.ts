@@ -131,7 +131,7 @@ function assertAllowed(a: EditAction, d: CampaignDetail): void {
   if (!d.can[need[a.action]]) throw new Error('Chiến dịch này không hỗ trợ thao tác đó từ Ads OS');
 }
 
-async function apply(ref: CampaignRef, a: EditAction): Promise<void> {
+async function apply(ref: CampaignRef, a: EditAction, detail: CampaignDetail): Promise<void> {
   if (ref.platform === 'google') {
     const s = await googleSession(ref.adAccountId);
     const [auth, cus] = [s.auth, s.customerId];
@@ -173,14 +173,16 @@ async function apply(ref: CampaignRef, a: EditAction): Promise<void> {
     const adv = ref.accountExternalId;
     const st = (on: boolean) => (on ? 'ENABLE' : 'DISABLE') as ttWrite.TtStatus;
     const micros = (v: number) => Math.round(v * 1_000_000);
+    // Upgraded Smart+ có bộ lệnh /smart_plus/… riêng — lệnh thường bị từ chối.
+    const spl = detail.campaign.smartPlus === true;
     switch (a.action) {
-      case 'rename': return ttWrite.renameCampaign(token, adv, ref.externalId, a.name);
-      case 'status': return ttWrite.setCampaignStatus(token, adv, ref.externalId, st(a.enabled));
+      case 'rename': return ttWrite.renameCampaign(token, adv, ref.externalId, a.name, spl);
+      case 'status': return ttWrite.setCampaignStatus(token, adv, ref.externalId, st(a.enabled), spl);
       case 'budget': return ttWrite.setCampaignDailyBudget(token, adv, ref.externalId, micros(a.dailyBudget), ref.currency);
-      case 'group_status': return ttWrite.setAdGroupStatus(token, adv, a.groupId, st(a.enabled));
-      // Ngân sách ngày của nhóm TikTok có hiệu lực từ 00:00 HÔM SAU — xem tiktok-write.ts.
-      case 'group_budget': return ttWrite.setAdGroupDailyBudget(token, adv, a.groupId, micros(a.dailyBudget), ref.currency);
-      case 'ad_status': return ttWrite.setAdStatus(token, adv, a.adId, st(a.enabled));
+      case 'group_status': return ttWrite.setAdGroupStatus(token, adv, a.groupId, st(a.enabled), spl);
+      // Nhóm thường: ngân sách ngày có hiệu lực từ 00:00 HÔM SAU; Smart+: ngay.
+      case 'group_budget': return ttWrite.setAdGroupDailyBudget(token, adv, a.groupId, micros(a.dailyBudget), ref.currency, spl);
+      case 'ad_status': return ttWrite.setAdStatus(token, adv, a.adId, st(a.enabled), spl);
       default: throw new Error('TikTok chưa hỗ trợ thao tác này từ Ads OS');
     }
   }
@@ -198,7 +200,7 @@ export async function editCampaign(ref: CampaignRef, a: EditAction): Promise<voi
   const d = describe(a, ref, detail);
   const key = `edit:${a.action}:${d.target}:${Date.now()}`;
   try {
-    await apply(ref, a);
+    await apply(ref, a, detail);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await db.query(

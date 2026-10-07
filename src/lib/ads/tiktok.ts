@@ -238,6 +238,12 @@ export interface TtCampaign {
   /** micros; null nếu không giới hạn ngân sách. */
   budgetMicros: number | null;
   createTime: string | null;
+  /**
+   * true = Upgraded Smart+ (campaign_automation_type UPGRADED_SMART_PLUS). Loại
+   * này KHÔNG nhận lệnh sửa/tạm dừng kiểu thường — phải dùng /smart_plus/…
+   * (tài liệu: "This API does not support Upgraded Smart Plus ads").
+   */
+  smartPlus: boolean;
 }
 
 type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -253,6 +259,7 @@ export function toCampaign(c: Raw): TtCampaign {
     budgetMode: c.budget_mode ?? 'BUDGET_MODE_INFINITE',
     budgetMicros: infinite ? null : ttMoneyToMicros(c.budget),
     createTime: c.create_time ?? null,
+    smartPlus: c.campaign_automation_type === 'UPGRADED_SMART_PLUS',
   };
 }
 
@@ -260,7 +267,7 @@ export async function listCampaigns(token: TtAuth, advertiserId: string): Promis
   const rows = await ttAll<Raw>('campaign/get', token, {
     advertiser_id: advertiserId,
     fields: ['campaign_id', 'campaign_name', 'objective_type', 'operation_status', 'secondary_status',
-      'budget', 'budget_mode', 'create_time'],
+      'budget', 'budget_mode', 'create_time', 'campaign_automation_type'],
   });
   return rows.map(toCampaign);
 }
