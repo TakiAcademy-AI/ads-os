@@ -122,6 +122,21 @@ export async function ttCall<T>(
     if (json.code === 0 || json.code === 20001) return json.data as T;
 
     const code = json.code ?? -1;
+    // MCP Server đang mở dần từng tool theo tài khoản: tool có trong danh sách
+    // nhưng gọi thì báo "being rolled out … (NOT_AVAILABLE)". Không phải lỗi
+    // tham số — nói rõ để người dùng không sửa đi sửa lại cấu hình.
+    const msg = json.message ?? '';
+    if (/NOT_AVAILABLE|being rolled out/i.test(msg)) {
+      const when = /availability:\s*([^(.]+)/i.exec(msg)?.[1]?.trim();
+      throw new TikTokError(
+        `TikTok chưa mở chức năng này qua kết nối MCP cho tài khoản quảng cáo này`
+        + (when ? ` (TikTok dự kiến: ${when})` : '')
+        + `. Làm thao tác này trong TikTok Ads Manager, hoặc kết nối tài khoản bằng app nhà phát triển `
+        + `(Kết nối → TikTok → Đăng nhập qua app TikTok) khi app được TikTok duyệt — kết nối qua app không bị giới hạn này.`
+        + ` (${msg})`,
+        code,
+      );
+    }
     const hint = HINTS[code];
     last = new TikTokError(
       hint ? `${hint} (${code}: ${json.message ?? ''})` : `${json.message ?? 'Lỗi không rõ'} (${code})`,
