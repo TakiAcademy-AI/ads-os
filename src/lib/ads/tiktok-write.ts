@@ -7,17 +7,17 @@
 // ≥ 105% số đã tiêu hôm nay; tối thiểu ~20 USD/ngày (200.000đ) với nhóm quảng
 // cáo — TikTok tự từ chối kèm lý do nếu sai.
 
-import { ttCall, microsToTtMoney, toCampaign, type TtCampaign } from './tiktok';
+import { ttCall, microsToTtMoney, toCampaign, type TtCampaign, type TtAuth } from './tiktok';
 
 export type TtStatus = 'ENABLE' | 'DISABLE';
 
-export async function setCampaignStatus(token: string, advertiserId: string, campaignId: string, status: TtStatus): Promise<void> {
+export async function setCampaignStatus(token: TtAuth, advertiserId: string, campaignId: string, status: TtStatus): Promise<void> {
   await ttCall('POST', 'campaign/status/update', token, {
     advertiser_id: advertiserId, campaign_ids: [campaignId], operation_status: status,
   });
 }
 
-export async function getCampaign(token: string, advertiserId: string, campaignId: string): Promise<TtCampaign | null> {
+export async function getCampaign(token: TtAuth, advertiserId: string, campaignId: string): Promise<TtCampaign | null> {
   const d = await ttCall<{ list?: Record<string, unknown>[] }>('GET', 'campaign/get', token, {
     advertiser_id: advertiserId,
     filtering: { campaign_ids: [campaignId] },
@@ -33,7 +33,7 @@ export async function getCampaign(token: string, advertiserId: string, campaignI
  * vào chiến dịch là đổi luôn cách phân bổ tiền mà người dùng không hề định.
  */
 export async function setCampaignDailyBudget(
-  token: string, advertiserId: string, campaignId: string, budgetMicros: number, currency: string,
+  token: TtAuth, advertiserId: string, campaignId: string, budgetMicros: number, currency: string,
 ): Promise<void> {
   const c = await getCampaign(token, advertiserId, campaignId);
   if (!c) throw new Error('Không tìm thấy chiến dịch trên TikTok');
@@ -45,11 +45,11 @@ export async function setCampaignDailyBudget(
   await ttCall('POST', 'campaign/update', token, { advertiser_id: advertiserId, campaign_id: campaignId, budget });
 }
 
-export async function renameCampaign(token: string, advertiserId: string, campaignId: string, name: string): Promise<void> {
+export async function renameCampaign(token: TtAuth, advertiserId: string, campaignId: string, name: string): Promise<void> {
   await ttCall('POST', 'campaign/update', token, { advertiser_id: advertiserId, campaign_id: campaignId, campaign_name: name });
 }
 
-export async function setAdGroupStatus(token: string, advertiserId: string, adgroupId: string, status: TtStatus): Promise<void> {
+export async function setAdGroupStatus(token: TtAuth, advertiserId: string, adgroupId: string, status: TtStatus): Promise<void> {
   await ttCall('POST', 'adgroup/status/update', token, {
     advertiser_id: advertiserId, adgroup_ids: [adgroupId], operation_status: status,
   });
@@ -61,7 +61,7 @@ export async function setAdGroupStatus(token: string, advertiserId: string, adgr
  * không phải ngay lập tức. Nơi gọi phải báo điều này cho người dùng.
  */
 export async function setAdGroupDailyBudget(
-  token: string, advertiserId: string, adgroupId: string, budgetMicros: number, currency: string,
+  token: TtAuth, advertiserId: string, adgroupId: string, budgetMicros: number, currency: string,
 ): Promise<void> {
   const budget = microsToTtMoney(budgetMicros, currency);
   if (budget <= 0) throw new Error('Ngân sách phải lớn hơn 0');
@@ -70,7 +70,7 @@ export async function setAdGroupDailyBudget(
   });
 }
 
-export async function setAdStatus(token: string, advertiserId: string, adId: string, status: TtStatus): Promise<void> {
+export async function setAdStatus(token: TtAuth, advertiserId: string, adId: string, status: TtStatus): Promise<void> {
   await ttCall('POST', 'ad/status/update', token, {
     advertiser_id: advertiserId, ad_ids: [adId], operation_status: status,
   });

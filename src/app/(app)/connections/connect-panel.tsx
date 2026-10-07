@@ -66,13 +66,14 @@ export function ConnectPanel({ oauthReady, googleReady, tiktokReady }: {
     return () => window.removeEventListener('message', onMessage);
   }, [router]);
 
-  function startOauth(platform: 'facebook' | 'google' | 'tiktok' = 'facebook') {
+  function startOauth(platform: 'facebook' | 'google' | 'tiktok' | 'tiktok-mcp' = 'facebook') {
     setBusy(true); setError(''); setInfo('');
     const w = 620, h = 720;
     const left = window.screenX + (window.outerWidth - w) / 2;
     const top = window.screenY + (window.outerHeight - h) / 2;
     popup.current = window.open(
-      `/api/connections/${platform}/start`, `${platform}-oauth`,
+      platform === 'tiktok-mcp' ? '/api/connections/tiktok/mcp/start' : `/api/connections/${platform}/start`,
+      `${platform}-oauth`,
       `width=${w},height=${h},left=${left},top=${top}`,
     );
     if (!popup.current) {
@@ -238,11 +239,26 @@ export function ConnectPanel({ oauthReady, googleReady, tiktokReady }: {
 
         {mode === 'tiktok' && (
           <>
+            <button className="btn" onClick={() => startOauth('tiktok-mcp')} disabled={busy}
+                    style={{ background: '#000', fontSize: 14, padding: '11px 20px' }}>
+              {busy ? 'Đang chờ cửa sổ TikTok…' : 'Kết nối TikTok for Business'}
+            </button>
+            <div className="note" style={{ maxWidth: 'none', marginTop: 10 }}>
+              Qua <b>TikTok for Business MCP Server</b> — <b>không cần tạo app nhà phát triển</b>,
+              không chờ duyệt. Popup mở trang đăng nhập TikTok for Business, bấm <b>Authorize</b>{' '}
+              là xong; Ads OS lấy mọi tài khoản quảng cáo bạn có quyền.
+              <br /><br />
+              <b>Quyền có hạn 30 ngày.</b> Ads OS tự làm mới token mỗi ngày, nhưng sau 30 ngày
+              TikTok bắt cấp quyền lại — bảng bên dưới hiện ngày hết hạn và cảnh báo trước 7 ngày.
+            </div>
+            <div style={{ borderTop: '1px solid var(--line)', margin: '18px 0 16px' }} />
+            <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 8 }}>
+              Cách khác: app nhà phát triển (token không hết hạn)
+            </div>
             {tiktokReady ? (
               <>
-                <button className="btn" onClick={() => startOauth('tiktok')} disabled={busy}
-                        style={{ background: '#000', fontSize: 14, padding: '11px 20px' }}>
-                  {busy ? 'Đang chờ cửa sổ TikTok…' : 'Đăng nhập bằng TikTok for Business'}
+                <button className="btn btn-ghost" onClick={() => startOauth('tiktok')} disabled={busy}>
+                  {busy ? 'Đang chờ cửa sổ TikTok…' : 'Đăng nhập qua app TikTok'}
                 </button>
                 <div className="note" style={{ maxWidth: 'none', marginTop: 10 }}>
                   Popup mở trang cấp quyền của TikTok — <b>tick chọn tài khoản quảng cáo</b> muốn
@@ -251,14 +267,13 @@ export function ConnectPanel({ oauthReady, googleReady, tiktokReady }: {
                 </div>
               </>
             ) : (
-              <div style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
-                Chưa cấu hình app TikTok để đăng nhập. Tạo app ở{' '}
+              <div style={{ fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                Chỉ cần nếu muốn token không hết hạn. Tạo app ở{' '}
                 <span className="mono">business-api.tiktok.com/portal/apps</span> (duyệt 2–3 ngày làm
                 việc), rồi thêm <span className="mono">TIKTOK_APP_ID</span> và{' '}
                 <span className="mono">TIKTOK_APP_SECRET</span> vào <span className="mono">.env</span>,
                 khai redirect URL{' '}
                 <span className="mono">{typeof window !== 'undefined' ? window.location.origin : ''}/api/connections/tiktok/callback</span>.
-                Trong lúc chờ, dán token bên dưới.
               </div>
             )}
             <div style={{ borderTop: '1px solid var(--line)', margin: '18px 0 16px' }} />

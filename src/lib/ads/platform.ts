@@ -17,6 +17,7 @@ import * as gWrite from './google-write';
 import { googleSession, GoogleSetupError } from './google-session';
 import { GoogleAdsError } from './google';
 import * as ttWrite from './tiktok-write';
+import { getTikTokAuth } from './tiktok-token';
 import { TikTokError } from './tiktok';
 
 export type Platform = 'facebook' | 'google' | 'tiktok';
@@ -75,7 +76,7 @@ export async function pauseCampaign(
     const token = await readToken(adAccountId);
     if (!token) throw new PlatformWriteError('Không đọc được token', true);
     if (ctx.platform === 'tiktok') {
-      await ttWrite.setCampaignStatus(token, ctx.externalId, campaignExternalId, 'DISABLE');
+      await ttWrite.setCampaignStatus(await getTikTokAuth(adAccountId), ctx.externalId, campaignExternalId, 'DISABLE');
       return;
     }
     await fbWrite.setCampaignStatus(token, campaignExternalId, 'PAUSED');
@@ -104,7 +105,7 @@ export async function readCampaignStatus(
     if (!token) return null;
     if (ctx.platform === 'tiktok') {
       // ENABLE/DISABLE → ACTIVE/PAUSED: nơi gọi so sánh với 'PAUSED'.
-      const c = await ttWrite.getCampaign(token, ctx.externalId, campaignExternalId);
+      const c = await ttWrite.getCampaign(await getTikTokAuth(adAccountId), ctx.externalId, campaignExternalId);
       return c ? (c.operationStatus === 'ENABLE' ? 'ACTIVE' : 'PAUSED') : null;
     }
     return await fbWrite.readCampaignStatus(token, campaignExternalId);
@@ -137,7 +138,7 @@ export async function setDailyBudget(
     if (ctx.platform === 'tiktok') {
       // TikTok nhận đơn vị tiền tệ CÓ phần lẻ; hàm bên dưới từ chối chiến dịch
       // không đặt ngân sách theo ngày ở cấp chiến dịch.
-      await ttWrite.setCampaignDailyBudget(token, ctx.externalId, campaignExternalId, budgetMicros, ctx.currency);
+      await ttWrite.setCampaignDailyBudget(await getTikTokAuth(adAccountId), ctx.externalId, campaignExternalId, budgetMicros, ctx.currency);
       return;
     }
     // Facebook nhận đơn vị nhỏ nhất của tiền tệ, nên phải truyền currency.
@@ -161,7 +162,7 @@ export async function readDailyBudget(
     const token = await readToken(adAccountId);
     if (!token) return null;
     if (ctx.platform === 'tiktok') {
-      const c = await ttWrite.getCampaign(token, ctx.externalId, campaignExternalId);
+      const c = await ttWrite.getCampaign(await getTikTokAuth(adAccountId), ctx.externalId, campaignExternalId);
       return c?.budgetMicros ?? null;
     }
     return await fbWrite.readCampaignBudget(token, campaignExternalId, ctx.currency);

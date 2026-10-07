@@ -27,7 +27,7 @@ export default async function ConnectionsPage() {
 
   const { rows: accounts } = await db.query(
     `SELECT id, platform, external_id, name, currency, timezone, status, token_source,
-            last_synced_at, last_error, (encrypted_token IS NOT NULL) AS has_token
+            last_synced_at, last_error, (encrypted_token IS NOT NULL) AS has_token, token_expires_at
      FROM ad_account WHERE owner_id = $1 ORDER BY created_at`,
     [user.id],
   );
@@ -110,6 +110,19 @@ export default async function ConnectionsPage() {
                       {a.has_token && a.token_source === 'service_account' && (
                         <div className="note" style={{ margin: '4px 0 0' }}>service account</div>
                       )}
+                      {a.has_token && a.token_expires_at && (() => {
+                        // Quyền có hạn (TikTok MCP: 30 ngày). Hết hạn là đồng bộ và tự
+                        // động hoá ngừng — phải báo TRƯỚC, không đợi tới lúc lỗi.
+                        const days = Math.floor((new Date(a.token_expires_at).getTime() - Date.now()) / 86_400_000);
+                        const soon = days < 7;
+                        return (
+                          <div className="note" style={{ margin: '4px 0 0', color: soon ? 'var(--red)' : undefined }}>
+                            {a.token_source === 'mcp' ? 'MCP · ' : ''}
+                            {days < 0 ? 'quyền đã hết hạn — kết nối lại'
+                              : `quyền hết hạn ${new Date(a.token_expires_at).toLocaleDateString('vi-VN')}${soon ? ` (còn ${days} ngày — kết nối lại)` : ''}`}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td style={{ color: 'var(--dim)' }}>
                       {a.last_synced_at ? dateTime(new Date(a.last_synced_at).toISOString()) : 'chưa bao giờ'}

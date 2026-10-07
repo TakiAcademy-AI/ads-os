@@ -51,7 +51,7 @@ export async function GET(req: Request) {
     if (!ids.length) {
       return html(origin, { ok: false, error: 'Token hợp lệ nhưng không có tài khoản quảng cáo nào được cấp quyền. Khi cấp quyền nhớ tick chọn tài khoản quảng cáo.' });
     }
-    const r = await saveTikTokAccounts(user.id, accessToken, ids, 'oauth');
+    const r = await saveTikTokAccounts(user.id, accessToken, ids, 'oauth', accessToken);
     return html(origin, { ok: true, accounts: r.saved + r.keptManual, keptManual: r.keptManual });
   } catch (e) {
     return html(origin, { ok: false, error: e instanceof Error ? e.message : 'Lỗi không rõ' });

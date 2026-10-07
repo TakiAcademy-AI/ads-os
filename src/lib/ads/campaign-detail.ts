@@ -12,6 +12,7 @@ import { googleCampaignDetail } from './google-detail';
 import { facebookCampaignDetail } from './facebook-detail';
 import { tiktokCampaignDetail } from './tiktok-detail';
 import * as ttWrite from './tiktok-write';
+import { getTikTokAuth } from './tiktok-token';
 import * as gWrite from './google-write';
 import * as fbWrite from './facebook-write';
 import type { CampaignDetail } from './campaign-detail-types';
@@ -54,9 +55,7 @@ export async function loadCampaignDetail(ref: CampaignRef): Promise<CampaignDeta
     return facebookCampaignDetail(token, ref.accountExternalId, ref.externalId, ref.currency);
   }
   if (ref.platform === 'tiktok') {
-    const token = await readToken(ref.adAccountId);
-    if (!token) throw new Error('Không đọc được token TikTok — kết nối lại tài khoản');
-    return tiktokCampaignDetail(token, ref.accountExternalId, ref.externalId, ref.currency);
+    return tiktokCampaignDetail(await getTikTokAuth(ref.adAccountId), ref.accountExternalId, ref.externalId, ref.currency);
   }
   throw new Error('Nền tảng này chưa hỗ trợ xem chi tiết');
 }
@@ -170,8 +169,7 @@ async function apply(ref: CampaignRef, a: EditAction): Promise<void> {
     }
   }
   if (ref.platform === 'tiktok') {
-    const token = await readToken(ref.adAccountId);
-    if (!token) throw new Error('Không đọc được token TikTok — kết nối lại tài khoản');
+    const token = await getTikTokAuth(ref.adAccountId);
     const adv = ref.accountExternalId;
     const st = (on: boolean) => (on ? 'ENABLE' : 'DISABLE') as ttWrite.TtStatus;
     const micros = (v: number) => Math.round(v * 1_000_000);

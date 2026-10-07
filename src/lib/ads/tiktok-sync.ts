@@ -5,7 +5,7 @@
 // muộn nên guard attribution dùng chung y hệt.
 
 import { db } from '../db';
-import { readToken } from './token';
+import { getTikTokAuth } from './tiktok-token';
 import { listCampaigns, fetchInsights, mapObjective, TikTokError } from './tiktok';
 import type { SyncResult } from './sync';
 import { zeroMissingDays, campaignIdMap } from './sync-common';
@@ -35,8 +35,13 @@ export async function syncTikTokAccount(
     `SELECT external_id, timezone FROM ad_account WHERE id = $1 AND platform = 'tiktok'`, [adAccountId],
   );
   if (!acct[0]) return { ...base, error: 'Không tìm thấy tài khoản TikTok' };
-  const token = await readToken(adAccountId);
-  if (!token) return { ...base, error: 'Chưa có token TikTok — kết nối lại' };
+  let token;
+  try {
+    // Tài khoản MCP: tự làm mới access token 24 giờ ở đây.
+    token = await getTikTokAuth(adAccountId);
+  } catch (e) {
+    return { ...base, durationMs: Date.now() - started, error: e instanceof Error ? e.message : String(e) };
+  }
   const advertiserId = acct[0].external_id as string;
   const tz = (acct[0].timezone as string) || 'Asia/Ho_Chi_Minh';
 

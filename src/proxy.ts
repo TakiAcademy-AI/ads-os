@@ -36,7 +36,7 @@ const MUTATING_PREFIXES = [
 function isReadOnly(path: string, method: string): boolean {
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
     // Ngoại lệ: OAuth start/callback là GET nhưng THÊM tài khoản quảng cáo.
-    return !/^\/api\/connections\/(facebook|google|tiktok)\/(start|callback)/.test(path);
+    return !/^\/api\/connections\/(facebook|google|tiktok)\/(mcp\/)?(start|callback)/.test(path);
   }
   return false;
 }

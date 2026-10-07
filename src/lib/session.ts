@@ -19,6 +19,8 @@ export interface SessionData {
   googleOauthState?: string;
   /** Cùng vai trò, cho luồng OAuth của TikTok. */
   tiktokOauthState?: string;
+  /** Kết nối TikTok qua MCP: PKCE verifier + client vừa đăng ký, giữ tới callback. */
+  tiktokMcp?: { verifier: string; clientId: string; redirectUri: string; state: string };
   /** Tài khoản QC đang xem. Xác thực lại quyền sở hữu mỗi lần đọc. */
   accountId?: string;
 }

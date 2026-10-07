@@ -4,7 +4,7 @@
 // (…_DELIVERY_OK, …_AUDIT, …_AUDIT_DENY, …_CAMPAIGN_DISABLE…) là thứ TikTok thật
 // sự áp dụng. Lý do bị từ chối nằm riêng ở /ad/review_info/.
 
-import { ttCall, ttMoneyToMicros, toCampaign } from './tiktok';
+import { ttCall, ttMoneyToMicros, toCampaign, type TtAuth } from './tiktok';
 import type { CampaignDetail, DetailIssue, DetailGroup, DetailAd } from './campaign-detail-types';
 
 type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -54,7 +54,7 @@ function groupSummary(g: Raw): string | null {
 }
 
 export async function tiktokCampaignDetail(
-  token: string, advertiserId: string, campaignId: string, currency: string,
+  token: TtAuth, advertiserId: string, campaignId: string, currency: string,
 ): Promise<CampaignDetail> {
   const partialErrors: string[] = [];
   const safe = async <T,>(label: string, p: Promise<T>, fallback: T): Promise<T> => {

@@ -19,6 +19,8 @@
 // hẳn report_type/data_level. Các endpoint chiến dịch/nhóm/quảng cáo giữ
 // nguyên trường ở cả hai bản. Đổi TIKTOK_API_VERSION khi đã kiểm v2.0 thật.
 
+import { callTool, toolNameFor, McpAuthError } from './tiktok-mcp';
+
 const HOST = process.env.TIKTOK_API_HOST || 'https://business-api.tiktok.com';
 const VERSION = process.env.TIKTOK_API_VERSION || 'v1.3';
 const TIMEOUT_MS = 30_000;
@@ -56,6 +58,14 @@ const RETRY_CODES = new Set([40100, 40016, 40133, 50000, 50002, 60001]);
 
 interface Envelope<T> { code?: number; message?: string; request_id?: string; data?: T }
 
+/**
+ * Cách xác thực của một tài khoản TikTok:
+ *  - app: access token của app nhà phát triển → gọi REST trực tiếp
+ *  - mcp: access token của TikTok for Business MCP Server → gọi TOOL tương ứng
+ * Chuỗi trơn = app (giữ tương thích với chỗ gọi cũ).
+ */
+export type TtAuth = string | { kind: 'app' | 'mcp'; token: string };
+
 function toQuery(params: Record<string, unknown>): string {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -73,18 +83,24 @@ function toQuery(params: Record<string, unknown>): string {
 export async function ttCall<T>(
   method: 'GET' | 'POST',
   path: string,
-  token: string | null,
+  auth: TtAuth | null,
   payload: Record<string, unknown> = {},
 ): Promise<T> {
+  const a = typeof auth === 'string' ? { kind: 'app' as const, token: auth } : auth;
   const url = `${HOST}/open_api/${VERSION}/${path.replace(/^\/+/, '').replace(/\/?$/, '/')}`;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers['Access-Token'] = token;
+  if (a?.kind === 'app') headers['Access-Token'] = a.token;
   const tries = method === 'GET' ? MAX_RETRY : 1;
   let last: TikTokError | null = null;
 
   for (let attempt = 0; attempt < tries; attempt++) {
     let json: Envelope<T>;
     try {
+      if (a?.kind === 'mcp') {
+        // Cùng endpoint, cùng tham số — chỉ đổi đường đi. Tool nhận object thật,
+        // không phải JSON nhét trong query như GET REST.
+        json = (await callTool(a.token, toolNameFor(path), payload)) as Envelope<T>;
+      } else {
       const res = await fetch(method === 'GET' ? `${url}?${toQuery(payload)}` : url, {
         method,
         headers,
@@ -93,7 +109,10 @@ export async function ttCall<T>(
       });
       json = (await res.json().catch(() => ({ code: res.status, message: `TikTok trả HTTP ${res.status}` }))) as Envelope<T>;
       if (!res.ok && json.code === undefined) json = { code: res.status, message: `TikTok trả HTTP ${res.status}` };
+      }
     } catch (e) {
+      // Token MCP hết hạn/bị thu hồi: lỗi xác thực, không thử lại.
+      if (e instanceof McpAuthError) throw new TikTokError(e.message, 40105, true);
       last = new TikTokError(`Không gọi được TikTok: ${e instanceof Error ? e.message : String(e)}`);
       if (attempt < tries - 1) { await new Promise((r) => setTimeout(r, 1000 * (attempt + 1))); continue; }
       throw last;
@@ -118,7 +137,7 @@ export async function ttCall<T>(
 interface PageInfo { page?: number; total_page?: number }
 
 /** Đi hết các trang của một endpoint dạng list. */
-async function ttAll<T>(path: string, token: string, params: Record<string, unknown>, maxPages = 20): Promise<T[]> {
+async function ttAll<T>(path: string, token: TtAuth, params: Record<string, unknown>, maxPages = 20): Promise<T[]> {
   const out: T[] = [];
   for (let page = 1; page <= maxPages; page++) {
     const d = await ttCall<{ list?: T[]; page_info?: PageInfo }>('GET', path, token, { ...params, page, page_size: 1000 });
@@ -162,7 +181,15 @@ export async function listAuthorizedAdvertisers(
   return (d.list ?? []).map((a) => ({ id: String(a.advertiser_id), name: a.advertiser_name ?? String(a.advertiser_id) }));
 }
 
-export async function advertiserInfo(token: string, ids: string[]): Promise<TtAdvertiser[]> {
+/** Tài khoản quảng cáo mà một lần cấp quyền MCP được dùng — không cần app_id/secret. */
+export async function listMcpAdvertisers(token: string): Promise<{ id: string; name: string }[]> {
+  const d = await ttCall<{ list?: { advertiser_id: string | number; advertiser_name?: string }[] }>(
+    'GET', 'oauth2/advertiser/get', { kind: 'mcp', token }, {},
+  );
+  return (d?.list ?? []).map((a) => ({ id: String(a.advertiser_id), name: a.advertiser_name ?? String(a.advertiser_id) }));
+}
+
+export async function advertiserInfo(token: TtAuth, ids: string[]): Promise<TtAdvertiser[]> {
   const out: TtAdvertiser[] = [];
   // advertiser/info nhận tối đa 100 ID mỗi lần.
   for (let i = 0; i < ids.length; i += 100) {
@@ -214,7 +241,7 @@ export function toCampaign(c: Raw): TtCampaign {
   };
 }
 
-export async function listCampaigns(token: string, advertiserId: string): Promise<TtCampaign[]> {
+export async function listCampaigns(token: TtAuth, advertiserId: string): Promise<TtCampaign[]> {
   const rows = await ttAll<Raw>('campaign/get', token, {
     advertiser_id: advertiserId,
     fields: ['campaign_id', 'campaign_name', 'objective_type', 'operation_status', 'secondary_status',
@@ -261,7 +288,7 @@ function addDays(d: string, n: number): string {
  * khoảng dài hơn bị cắt thành nhiều đoạn.
  */
 export async function fetchInsights(
-  token: string, advertiserId: string, opts: { since: string; until: string },
+  token: TtAuth, advertiserId: string, opts: { since: string; until: string },
 ): Promise<TtInsight[]> {
   const out: TtInsight[] = [];
   for (let start = opts.since; start <= opts.until; start = addDays(start, 30)) {

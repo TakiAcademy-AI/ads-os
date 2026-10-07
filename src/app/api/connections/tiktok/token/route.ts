@@ -31,7 +31,7 @@ export async function POST(req: Request) {
       ids = (await listAuthorizedAdvertisers(token, cfg.appId, cfg.secret)).map((a) => a.id);
     }
     if (!ids.length) return NextResponse.json({ error: 'Token này không có tài khoản quảng cáo nào.' }, { status: 400 });
-    const r = await saveTikTokAccounts(user.id, token, ids, 'manual');
+    const r = await saveTikTokAccounts(user.id, token, ids, 'manual', token);
     return NextResponse.json({ saved: r.saved });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Lỗi không rõ' }, { status: 400 });
