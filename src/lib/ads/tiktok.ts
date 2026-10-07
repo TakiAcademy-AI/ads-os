@@ -322,3 +322,64 @@ export async function fetchInsights(
   }
   return out;
 }
+
+// ─── Danh tính (kênh TikTok) và bài đăng — cho Đăng nhanh kiểu Spark Ads ─────
+
+export interface TtIdentity {
+  id: string;
+  type: string;           // TT_USER | BC_AUTH_TT | AUTH_CODE | CUSTOMIZED_USER
+  name: string;
+  avatar: string | null;
+  bcId: string | null;    // identity_authorized_bc_id — bắt buộc gửi kèm với BC_AUTH_TT
+  usable: boolean;
+}
+
+/**
+ * Kênh TikTok dùng được để đẩy bài. CUSTOMIZED_USER là danh tính tự đặt, không
+ * có bài đăng — bỏ qua. Không lọc theo loại khi gọi: một lần gọi trả hết.
+ */
+export async function listIdentities(auth: TtAuth, advertiserId: string): Promise<TtIdentity[]> {
+  const d = await ttCall<{ identity_list?: Raw[] }>('GET', 'identity/get', auth, { advertiser_id: advertiserId, page_size: 100 });
+  return (d.identity_list ?? [])
+    .filter((i) => i.identity_type !== 'CUSTOMIZED_USER')
+    .map((i) => ({
+      id: String(i.identity_id),
+      type: String(i.identity_type),
+      name: String(i.display_name ?? i.username ?? i.identity_id),
+      avatar: i.profile_image ?? null,
+      bcId: i.identity_authorized_bc_id ?? null,
+      usable: (i.available_status ?? 'AVAILABLE') === 'AVAILABLE' && i.can_pull_video !== false,
+    }));
+}
+
+export interface TtPost {
+  itemId: string;
+  text: string;
+  cover: string | null;
+  durationSec: number | null;
+  status: string;
+}
+
+export async function listIdentityPosts(
+  auth: TtAuth, advertiserId: string, identity: { id: string; type: string; bcId?: string | null },
+  cursor?: number,
+): Promise<{ posts: TtPost[]; cursor: number | null }> {
+  const d = await ttCall<{ video_list?: Raw[]; cursor?: number; has_more?: boolean }>('GET', 'identity/video/get', auth, {
+    advertiser_id: advertiserId,
+    identity_id: identity.id,
+    identity_type: identity.type,
+    ...(identity.bcId ? { identity_authorized_bc_id: identity.bcId } : {}),
+    count: 20,
+    ...(cursor ? { cursor } : {}),
+  });
+  return {
+    posts: (d.video_list ?? []).map((v) => ({
+      itemId: String(v.item_id),
+      text: v.text ?? '',
+      cover: v.video_info?.poster_url ?? null,
+      durationSec: v.video_info?.duration ?? null,
+      status: v.status ?? '',
+    })),
+    cursor: d.has_more ? (d.cursor ?? null) : null,
+  };
+}

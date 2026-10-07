@@ -156,7 +156,8 @@ export async function tiktokCampaignDetail(
       lifetimeBudgetMicros: camp.budgetMode === 'BUDGET_MODE_TOTAL' ? camp.budgetMicros : null,
       budgetLevel: cbo ? 'campaign' : detailGroups.some((g) => g.dailyBudgetMicros) ? 'group' : 'none',
       budgetShared: false,
-      start: camp.createTime,
+      // create_time là UTC "YYYY-MM-DD HH:MM:SS" — gắn Z để hiển thị đúng giờ địa phương.
+      start: camp.createTime ? `${camp.createTime.replace(' ', 'T')}Z` : null,
       end: null,
       nativeUrl: `https://ads.tiktok.com/i18n/perf/campaign?aadvid=${advertiserId}`,
     },

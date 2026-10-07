@@ -211,7 +211,7 @@ export function CampaignEditor({ campaignId, adAccountId, detail, canWrite }: {
               <tr><td style={{ color: 'var(--dim)' }}>Giá thầu</td>
                 <td>{c.bidding ?? (c.budgetLevel === 'group' ? <span style={{ color: 'var(--dim)' }}>Đặt ở từng nhóm quảng cáo</span> : '—')}</td></tr>
               <tr><td style={{ color: 'var(--dim)' }}>Thời gian</td>
-                <td>{c.start ? `từ ${c.start.slice(0, 16).replace('T', ' ')}` : '—'}{c.end ? ` đến ${c.end.slice(0, 16).replace('T', ' ')}` : ' · không ngày kết thúc'}</td></tr>
+                <td>{c.start ? `từ ${when(c.start)}` : '—'}{c.end ? ` đến ${when(c.end)}` : ' · không ngày kết thúc'}</td></tr>
             </tbody>
           </table>
         </div>
@@ -308,6 +308,20 @@ export function CampaignEditor({ campaignId, adAccountId, detail, canWrite }: {
       </div>
     </div>
   );
+}
+
+/**
+ * Thời điểm từ nền tảng: chuỗi có múi giờ (ISO …Z / +07:00) → giờ VN; chuỗi
+ * không múi giờ (Google trả theo giờ tài khoản) → để nguyên.
+ */
+function when(v: string): string {
+  if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(v)) {
+    const d = new Date(v);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+  }
+  return v.slice(0, 16).replace('T', ' ');
 }
 
 /** Nội dung quảng cáo Facebook có thể dài cả trang — rút còn 3 dòng, bấm để mở. */
